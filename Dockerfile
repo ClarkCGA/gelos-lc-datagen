@@ -9,9 +9,11 @@ ENV PATH="$PATH:/opt/conda/envs/gfm_bench/bin"
 
 # Create a non-root user and switch to that user
 RUN useradd -m benchuser
+RUN mkdir -p /home/benchuser/.local && chown -R benchuser:benchuser /home/benchuser
 USER benchuser
 
 WORKDIR /home/benchuser
+
 # COPY --chown=benchuser main.ipynb .
 
 # Expose ports
