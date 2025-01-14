@@ -4,7 +4,7 @@ This repo contains the code to generate samples for the pilot version of GFM-Ben
 
 To run the code:
 ```
-docker run -it -p 888s8:8888 -p 8787:8787 -v <PATH_TO_REPO>:/home/benchuser/code/:rw -v <PATH_TO_DATA>:/home/benchuser/data/ gfm-benchsss
+docker run -it -p 8888:8888 -p 8787:8787 -v <PATH_TO_REPO>:/home/benchuser/code/:rw -v <PATH_TO_DATA>:/home/benchuser/data/ gfm-bench
 ```
 
 The repo contains areas of interest for sample generation in two separate GeoJSON files located under `data/`.
