@@ -15,7 +15,7 @@ USER benchuser
 WORKDIR /home/benchuser
 
 #COPY --chown=benchuser main.ipynb .
-COPY --chown=benchuser:benchuser . /home/benchuser/code
+#COPY --chown=benchuser:benchuser . /home/benchuser/code
 
 # Expose ports
 EXPOSE 8888
