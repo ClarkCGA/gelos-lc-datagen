@@ -15,12 +15,12 @@ sentinel_2:
 # Land Cover (LC) settings
 land_cover:
   collection: "io-lulc-annual-v02"
-  year: "2023-01-01/2023-12-31" # Year for the land cover dataset
+  year: "2023-01-02/2023-12-31" # Year for the land cover dataset
 
 # Chip settings
 chips:
-  sample_size: 256  # Size of samples for homogeneity check
-  chip_size: 128  # Final chip size for training data
+  sample_size: 100  # Size of samples for homogeneity check
+  chip_size: 224  # Final chip size for training data
 
 # Output settings
 output:
