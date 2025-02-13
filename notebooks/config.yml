@@ -9,7 +9,7 @@ sentinel_2:
     - "2023-07-01/2023-09-30"  # JAS (Jul-Aug-Sep)
     - "2023-10-01/2023-12-31"  # OND (Oct-Nov-Dec)
   cloud_cover: 1  # Maximum allowed cloud cover percentage
-  bands: ["B2", "B3", "B4", "B8", "B11", "B12"]  # Blue, Green, Red, NIR, SWIR1, SWIR2
+  bands: ["B02", "B03", "B04", "B08", "B11", "B12"]  # Blue, Green, Red, NIR, SWIR1, SWIR2
   resolution: 10  # Spatial resolution in meters
 
 # Land Cover (LC) settings
