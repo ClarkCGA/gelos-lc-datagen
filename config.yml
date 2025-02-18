@@ -1,0 +1,32 @@
+# Configuration file for chip generation,
+
+# Sentinel-2 (S2) settings
+sentinel_2:
+  collection: "sentinel-2-l2a"
+  time_ranges:
+    - "2023-01-01/2023-03-31"  # JFM (Jan-Feb-Mar)
+    - "2023-04-01/2023-06-30"  # AMJ (Apr-May-Jun)
+    - "2023-07-01/2023-09-30"  # JAS (Jul-Aug-Sep)
+    - "2023-10-01/2023-12-31"  # OND (Oct-Nov-Dec)
+  cloud_cover: 1  # Maximum allowed cloud cover percentage
+  bands: ["B02", "B03", "B04", "B08", "B11", "B12"]  # Blue, Green, Red, NIR, SWIR1, SWIR2
+  resolution: 10  # Spatial resolution in meters
+
+# Land Cover (LC) settings
+land_cover:
+  collection: "io-lulc-annual-v02"
+  year: "2023-01-02/2023-12-31" # Year for the land cover dataset
+
+# Chip settings
+chips:
+  sample_size: 100  # Size of samples for homogeneity check
+  chip_size: 224  # Final chip size for training data
+
+# Output settings
+output:
+  directory: "notebooks/test_output_dump"  # Update later
+  naming_convention: "s2_{season}_{index:05}.tif"  # Season-based naming (JFM, AMJ, etc.)
+
+# Metadata
+metadata:
+  file: "metadata.csv"
