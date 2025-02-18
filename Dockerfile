@@ -14,13 +14,8 @@ USER benchuser
 
 WORKDIR /home/benchuser
 
-<<<<<<< Updated upstream
 #COPY --chown=benchuser main.ipynb .
 #COPY --chown=benchuser:benchuser . /home/benchuser/code
-=======
-# COPY --chown=benchuser main.ipynb .
-# COPY --chown=benchuser:benchuser . /home/benchuser/code
->>>>>>> Stashed changes
 
 # Expose ports
 EXPOSE 8888
