@@ -22,11 +22,6 @@ chips:
   sample_size: 100  # Size of samples for homogeneity check
   chip_size: 224  # Final chip size for training data
 
-# Output settings
-output:
-  directory: "notebooks/test_output_dump"  # Update later
-  naming_convention: "s2_{season}_{index:05}.tif"  # Season-based naming (JFM, AMJ, etc.)
-
 # Metadata
 metadata:
   file: "metadata.csv"
