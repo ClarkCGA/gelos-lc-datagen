@@ -21,6 +21,14 @@ def search_s2_scenes(aoi, date_range, catalog, config):
     return items
 
 
+def mask_cloudy_pixels(s2_stack):
+    scl = s2_stack.sel(band="SCL")
+    cloud_mask = scl.isin([3, 8, 9, 10])
+    s2_stack = s2_stack.where(~cloud_mask)
+    
+    return s2_stack
+
+
 def search_lc_scene(bbox, catalog, config):
     lc_search = catalog.search(
         collections=config["land_cover"]["collection"],
@@ -45,9 +53,10 @@ def stack_s2_data(s2_items, config):
             fill_value=np.nan,
             bounds_latlon = s2_items[0].bbox
         )
-        # s2_stack_resampled = s2_stack.median("time", skipna=True)
         s2_stack = s2_stack.chunk(chunks={"band": len(config["sentinel_2"]["bands"]), "x": -1, "y": "auto"})
-
+        s2_stack = mask_cloudy_pixels(s2_stack)
+        s2_stack = s2_stack.drop_sel(band="SCL")
+        
         return s2_stack
     except Exception as e:
         print(f"Error stacking Sentinel-2 data: {e}")
