@@ -1,9 +1,9 @@
 import os
-import glob
 import pandas as pd
 import geopandas as gpd
 import dask_geopandas as dgpd
 import dask.dataframe as dd
+from dask import delayed
 from dask.distributed import Client, LocalCluster
 
 def select_unique_intersections(gdf):
@@ -13,29 +13,35 @@ def select_unique_intersections(gdf):
 
 def filter_globfire(data_paths, years):
     filtered_gdf = dgpd.read_file(data_paths[years[0]], chunksize=2048)
+    # filtered_gdf = filtered_gdf.persist()
+    
     for i in range(1, len(years)):
         current_year = years[i]
         print(f"Processing: {years[i-1]} vs {current_year}")
         
-        # Load the next year
         next_year_gdf = dgpd.read_file(data_paths[current_year], chunksize=2048)
-        
-        print(f"Checking for intersecting geometeries: {years[i-1]} vs {current_year}")
+            
+        print(f"Checking for intersecting geometries: {years[i-1]} vs {current_year}")
         intersections = dgpd.sjoin(filtered_gdf, next_year_gdf, how="inner", predicate="intersects")
-        
-        print(f"computing indices of intersecting geometeries: {years[i-1]} vs {current_year}")
+            
+        print(f"Computing indices of intersecting geometries: {years[i-1]} vs {current_year}")
         intersecting_ids = intersections.map_partitions(select_unique_intersections).compute()
-        
-        print(f"removing intersection of {current_year} from main datasets")
+            
+        print(f"Removing intersections from {years[i-1]} or filtered_gdf")
         filtered_gdf = filtered_gdf.map_partitions(lambda df: df[~df.index.isin(intersecting_ids)])
+            
+        print(f"Filtering non-intersecting geometries from {current_year}")
+        non_intersecting_next_year = next_year_gdf.map_partitions(lambda df: df[~df.index.isin(intersecting_ids)])
+            
+        print(f"Append non-intersecting geometries from {current_year} to the main dataset")
+        filtered_gdf = dgpd.GeoDataFrame(dd.concat([filtered_gdf, non_intersecting_next_year], axis=0))
         
-        print(f"Remaining records after filtering {current_year}: {filtered_gdf.compute().shape[0]}")
-    
     final_filtered_gdf = filtered_gdf.compute()
     final_filtered_gdf.to_file("final_non_intersecting_wildfires_2015_2023.shp")
 
 
 if __name__ == "__main__":
+    # Initialize Dask cluster with optimized settings
     cluster = LocalCluster()
     client = Client(cluster)
     print(f"Dask Dashboard: {client.dashboard_link}")
