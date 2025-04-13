@@ -110,3 +110,12 @@ def gen_chips(s2_array, lc_array, index):
 
 
     return gen_status, dts
+
+def get_continent(point, continents_path):
+    """Returns the continent name for a given shapely Point (in (lon, lat) order)."""
+    continents = gpd.read_file(continents_path)
+
+    for _, row in continents.iterrows():
+        if row['geometry'].contains(point):
+            return row['CONTINENT']
+    return "Unknown"
