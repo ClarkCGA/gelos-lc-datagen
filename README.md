@@ -15,6 +15,6 @@ This dataset has multiple tracks.
 
 ## Dataset versions
 
-- v0.1: Initial version with low number of Built-up class.
+- v0.1: Initial version with low number of Built-up class. This version contains 224 x 224 chips that have a homogeneous LC class of size 100 x 100 in the middle. During chip generation, we also don't filter out chips that are all from the same tile and have the same LC class (this is causing oversampling in some regions, and will be updated in future versions). 
 - v0.11: Updated v0.1 with extra AOIs for Built-up class but downsampled to ~26K samples (5K for each class other than built up).
 - v0.20: Same as v0.11 but no downsampling.
