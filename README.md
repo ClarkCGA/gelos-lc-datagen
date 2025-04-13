@@ -1,12 +1,20 @@
-# Generating Data for GFM-Bech Pilot
+# Generating Data for GFM-Bech
 
-This repo contains the code to generate samples for the pilot version of GFM-Bench presented at AGU Fall Meeting 2024. 
+This repo contains the code to generate samples for GFM-Bench. 
 
 To run the code:
 ```
 docker run -it -p 8888:8888 -p 8787:8787 -v <PATH_TO_REPO>:/home/benchuser/code/:rw -v <PATH_TO_DATA>:/home/benchuser/data/ gfm-bench
 ```
 
-The repo contains areas of interest for sample generation in two separate GeoJSON files located under `data/`.
+The repo contains areas of interest for sample generation in GeoJSON files located under `data/`. Each version of the dataset has its own file. 
 
-The main notebook to generate the data is `main.ipynb`, and the `data_cleaning.ipynb` is used to clean the data befor running through the model. 
+This dataset has multiple tracks. 
+- LC Track: The main notebook to generate the data is `00_lc_generation.ipynb`, and the `01_lc_data_cleaning.ipynb` is used to clean the data.
+- Fire Track: The main notebook to generate the data is `02_fire_generation.ipynb` which is currently a WIP. 
+
+## Dataset versions
+
+- v0.1: Initial version with low number of Built-up class.
+- v0.11: Updated v0.1 with extra AOIs for Built-up class but downsampled to ~26K samples (5K for each class other than built up).
+- v0.20: Same as v0.11 but no downsampling.
