@@ -95,12 +95,13 @@ def missing_values(array, chip_size, sample_size):
     
 def gen_chips(s2_array, lc_array, index):
 
-    lc_path = f"/home/benchuser/data/lc_{index:06}.tif"
+    root_path = "/home/benchuser/data/"
+    lc_path = f"{root_path}/lc_{index:06}.tif"
     dts = []
     try:
         for dt in s2_array.time.values:
             ts = pd.to_datetime(str(dt)) 
-            s2_path = f"/home/benchuser/data/s2_{index:06}_{ts.strftime('%Y%m%d')}.tif"
+            s2_path = f"{root_path}/s2_{index:06}_{ts.strftime('%Y%m%d')}.tif"
             s2_array.sel(time = dt).squeeze().rio.to_raster(s2_path)
             dts.append(ts.strftime('%Y%m%d'))
         lc_array.rio.to_raster(lc_path)
