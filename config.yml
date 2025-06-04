@@ -13,6 +13,13 @@ sentinel_2:
   bands: ["B02", "B03", "B04", "B08", "B11", "B12", "SCL"]  # Blue, Green, Red, NIR, SWIR1, SWIR2
   resolution: 10  # Spatial resolution in meters
 
+# Sentinel-1 (S1) settings
+sentinel_1:
+  collection: "sentinel-1-rtc"
+  nodata_pixel_percentage : 5 # Maximum missing data percentage
+  #bands: ["B02", "B03", "B04", "B08", "B11", "B12", "SCL"]  # Blue, Green, Red, NIR, SWIR1, SWIR2
+  resolution: 10  # Spatial resolution in meters
+
 # Land Cover (LC) settings
 land_cover:
   collection: "io-lulc-annual-v02"

@@ -1,6 +1,8 @@
 import numpy as np
 import stackstac 
 import pandas as pd 
+from datetime import datetime, timedelta
+import pystac
 
 def search_s2_scenes(aoi, date_range, catalog, config):
     """
@@ -20,7 +22,27 @@ def search_s2_scenes(aoi, date_range, catalog, config):
     items = s2_search.item_collection()
     return items
 
+def search_s1_scenes(aoi, s2_datetime, catalog, config):
+    """
+    Searches for Sentinel-1 scenes within the AOI that are closest to the specified datetime.
+    """
+    delta = timedelta(days=6)
+    start = s2_datetime - delta
+    end = s2_datetime + delta
+    datetime_range = f"{start.isoformat(timespec='seconds').replace('+00:00', 'Z')}/{end.isoformat(timespec='seconds').replace('+00:00', 'Z')}"
+    s1_search = catalog.search(
+        collections=config["sentinel_1"]["collection"],
+        bbox=aoi['geometry'].bounds, 
+        datetime=datetime_range,
+        max_items=10,
+    )
+    # Convert to list and sort by closeness to s2_datetime
+    s1_collection = s1_search.item_collection()
 
+    sorted_items = sorted(s1_collection.items, key=lambda item: abs(item.datetime - s2_datetime))
+    s1_collection = pystac.item_collection.ItemCollection([sorted_items[0]])
+
+    return s1_collection
 def mask_cloudy_pixels(s2_stack):
     scl = s2_stack.sel(band="SCL")
     cloud_mask = scl.isin([3, 8, 9, 10])
