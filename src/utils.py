@@ -79,7 +79,10 @@ def search_landsat_scenes(aoi, s2_datetime, catalog, config):
         collections=config["landsat"]["collection"],
         bbox=aoi['geometry'].bounds, 
         datetime=datetime_range,
-        query={"platform": {"in": config["landsat"]["platforms"]}},
+        query = ["platform": {"in": config["landsat"]["platforms"]},
+        "eo:cloud_cover": {"lt": config["landsat"]["cloud_cover"]},
+        "s2:nodata_pixel_percentage": {"lt": config["landsat"]["nodata_pixel_percentage"]}
+            ],
         sortby=["+properties.eo:cloud_cover"],
         
         max_items=1
@@ -142,6 +145,11 @@ def stack_dem_data(items, config, epsg=None, bbox=None):
     if not items:
         print("No dem data found.")
         return None
+    if config["dem"]["native_crs"] == True:
+        try:
+            epsg = items[0].properties["proj:epsg"]
+        except:
+            epsg = int(items[0].properties["proj:code"].split(":")[-1])
     try:
         stacked_data = stackstac.stack(
             items,

@@ -27,6 +27,7 @@ sentinel_1:
 landsat:
   collection: "landsat-c2-l2"
   platforms: ["landsat-8", "landsat-9"]
+  cloud_cover: 50  # Maximum allowed cloud cover percentage
   nodata_pixel_percentage : 5 # Maximum missing data percentage
   bands: ["blue", "green", "red", "nir08", "swir16", "swir22", "qa_pixel"]  # Blue, Green, Red, NIR, SWIR1, SWIR2
   cloud_band: "qa_pixel"
