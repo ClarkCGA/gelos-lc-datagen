@@ -3,6 +3,8 @@ import stackstac
 import pandas as pd 
 from datetime import datetime, timedelta
 import pystac
+from PIL import Image
+import os
 
 def search_s2_scenes(aoi, date_range, catalog, config):
     """
@@ -202,6 +204,66 @@ def save_multitemproal_chips(array, root_path, index):
         dts.append(ts.strftime('%Y%m%d'))
     return dts
 
+def mask_nodata(band, nodata_values=(-999,)):
+    '''
+    Mask nodata to nan
+    :param band
+    :param nodata_values:nodata values in chips is -999
+    :return band
+    '''
+    band = band.astype(float)
+    for val in nodata_values:
+        band[band == val] = np.nan
+    return band
+
+def normalize(band):
+    '''
+    Normalize a band to 0-1 range(float)
+    :param band (ndarray)
+    return normalize band (ndarray); when max equals min, returns zeros.
+    '''
+    if np.nanmean(band) >= 4000:
+        band = band / 6000
+    else:
+        band = band / 4000
+    band = np.clip(band, None, 1)
+
+    return band
+
+def save_thumbnails(array, root_path, index):
+    '''
+    Read array, process and save png thumbnails.
+    :param array: xr.DataArray
+    :param root_path: directory to save thumbnails
+    :return
+    '''
+    try:
+        # iterate through time
+        for i, dt in enumerate(array.time.values):
+            ts = pd.to_datetime(str(dt)) 
+            filename = f"{array.name}_{index:06}_{i}_{ts.strftime('%Y%m%d')}.png"
+            file_path = os.path.join(root_path, filename)
+            
+            blue  = array.isel(time = i,band=0).values.astype(float)
+            green = array.isel(time = i,band=1).values.astype(float)
+            red   = array.isel(time = i,band=2).values.astype(float)
+        
+            # mask and normalize
+            blue = normalize(mask_nodata(blue))
+            green = normalize(mask_nodata(green))
+            red   = normalize(mask_nodata(red))
+
+            # stack and convert to 8-bit
+            rgb = np.dstack((red, green, blue))
+            rgb_8bit = (rgb * 255).astype(np.uint8)
+        
+            pil_img = Image.fromarray(rgb_8bit)
+            pil_img.save(file_path, format="PNG")
+
+    except Exception as e:
+        print(f"Error: {e}")
+        return 
+
 def gen_chips(s2_array, s1_array, landsat_array, lc_array, dem_array, index):
 
     root_path = "/home/benchuser/data/"
@@ -212,6 +274,9 @@ def gen_chips(s2_array, s1_array, landsat_array, lc_array, dem_array, index):
         s2_dts = save_multitemproal_chips(s2_array, root_path, index)
         s1_dts = save_multitemproal_chips(s1_array, root_path, index)
         landsat_dts = save_multitemproal_chips(landsat_array, root_path, index)
+
+        save_thumbnails(s2_array, root_path, index)
+        save_thumbnails(landsat_array, root_path, index)
     
         lc_array.rio.to_raster(lc_path)
         dem_array.rio.to_raster(dem_path)
