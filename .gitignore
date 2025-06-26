@@ -2,3 +2,4 @@
 **.ipynb_checkpoints
 data/*.csv
 data/fire_data/*
+data/fire_data_v1/*

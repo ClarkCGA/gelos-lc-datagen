@@ -85,7 +85,7 @@ def unique_class(window, axis=None, **kwargs):
     return np.all(window == window[0, 0], axis=axis)
 
 def missing_values(array, chip_size, sample_size):
-    """Check if the given S2/LC stacked array contains NaN values over the cenrtal sample area."""
+    """Check if the given S2/LC stacked array contains NaN values over the central sample area."""
     array_trimmed = array.isel(x = slice(int((chip_size - sample_size) / 2), int((chip_size + sample_size) / 2)), 
                                y = slice(int((chip_size - sample_size) / 2), int((chip_size + sample_size) / 2))
                               )

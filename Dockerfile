@@ -15,11 +15,12 @@ USER benchuser
 WORKDIR /home/benchuser
 
 #COPY --chown=benchuser main.ipynb .
-#COPY --chown=benchuser:benchuser . /home/benchuser/code
+COPY --chown=benchuser:benchuser ./src/ .
+COPY --chown=benchuser:benchuser ./notebooks/ .
 
 # Expose ports
 EXPOSE 8888
 EXPOSE 8787
 
 # Start JupyterLab
-CMD ["jupyter", "lab", "--ip=0.0.0.0"]
+CMD ["jupyter", "lab", "--ip=0.0.0.0", "--allow-root"]
