@@ -8,4 +8,5 @@ services:
     volumes:
       - /workspace/Denys/gfm-bench:/home/benchuser/code/
       - /workspace/_output/gfm-bench-data:/home/benchuser/data/
+      - /workspace/_output/gfm-explainability/data/input:/home/benchuser/final_data/
     shm_size: '2gb'
