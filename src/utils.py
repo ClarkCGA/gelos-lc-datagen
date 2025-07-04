@@ -40,7 +40,8 @@ def search_s1_scenes(aoi, s2_datetime, catalog, config):
     )
     # Convert to list and sort by closeness to s2_datetime
     s1_collection = s1_search.item_collection()
-
+    if len(s1_collection) == 0:
+        return s1_collection
     sorted_items = sorted(s1_collection.items, key=lambda item: abs(item.datetime - s2_datetime))
     s1_collection = pystac.item_collection.ItemCollection([sorted_items[0]])
 
@@ -81,12 +82,11 @@ def search_landsat_scenes(aoi, s2_datetime, catalog, config):
         collections=config["landsat"]["collection"],
         bbox=aoi['geometry'].bounds, 
         datetime=datetime_range,
-        query = ["platform": {"in": config["landsat"]["platforms"]},
-        "eo:cloud_cover": {"lt": config["landsat"]["cloud_cover"]},
-        "s2:nodata_pixel_percentage": {"lt": config["landsat"]["nodata_pixel_percentage"]}
-            ],
+        query = {
+            "platform": {"in": config["landsat"]["platforms"]},
+            "eo:cloud_cover": {"lt": config["landsat"]["cloud_cover"]},
+        },
         sortby=["+properties.eo:cloud_cover"],
-        
         max_items=1
     )
     # Convert to list and sort by closeness to s2_datetime
@@ -237,36 +237,30 @@ def save_thumbnails(array, root_path, index):
     :param root_path: directory to save thumbnails
     :return
     '''
-    try:
-        # iterate through time
-        for i, dt in enumerate(array.time.values):
-            ts = pd.to_datetime(str(dt)) 
-            filename = f"{array.name}_{index:06}_{i}_{ts.strftime('%Y%m%d')}.png"
-            file_path = os.path.join(root_path, filename)
-            
-            blue  = array.isel(time = i,band=0).values.astype(float)
-            green = array.isel(time = i,band=1).values.astype(float)
-            red   = array.isel(time = i,band=2).values.astype(float)
+
+    for i, dt in enumerate(array.time.values):
+        ts = pd.to_datetime(str(dt)) 
+        filename = f"{array.name}_{index:06}_{i}_{ts.strftime('%Y%m%d')}.png"
+        file_path = os.path.join(root_path, filename)
         
-            # mask and normalize
-            blue = normalize(mask_nodata(blue))
-            green = normalize(mask_nodata(green))
-            red   = normalize(mask_nodata(red))
+        blue  = array.isel(time = i,band=0).values.astype(float)
+        green = array.isel(time = i,band=1).values.astype(float)
+        red   = array.isel(time = i,band=2).values.astype(float)
+    
+        # mask and normalize
+        blue = normalize(mask_nodata(blue))
+        green = normalize(mask_nodata(green))
+        red   = normalize(mask_nodata(red))
 
-            # stack and convert to 8-bit
-            rgb = np.dstack((red, green, blue))
-            rgb_8bit = (rgb * 255).astype(np.uint8)
-        
-            pil_img = Image.fromarray(rgb_8bit)
-            pil_img.save(file_path, format="PNG")
+        # stack and convert to 8-bit
+        rgb = np.dstack((red, green, blue))
+        rgb_8bit = (rgb * 255).astype(np.uint8)
+    
+        pil_img = Image.fromarray(rgb_8bit)
+        pil_img.save(file_path, format="PNG")
 
-    except Exception as e:
-        print(f"Error: {e}")
-        return 
+def gen_chips(s2_array, s1_array, landsat_array, lc_array, dem_array, index, root_path):
 
-def gen_chips(s2_array, s1_array, landsat_array, lc_array, dem_array, index):
-
-    root_path = "/home/benchuser/data/"
     lc_path = f"{root_path}/lc_{index:06}.tif"
     dem_path = f"{root_path}/dem_{index:06}.tif"
     s2_dts, s1_dts, landsat_dts = [], [], []

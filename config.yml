@@ -1,5 +1,23 @@
-# Configuration file for chip generation,
+# Configuration file for chip generation
+dataset:
+  version: "v0.40"
 
+aoi:
+  version: "v0.30"
+
+working_dir: "/home/benchuser/data"
+output_dir: "/home/benchuser/final_data"
+# Metadata
+metadata:
+  file: "metadata.csv"
+
+excluded_aoi_indices: 
+ - 12
+ - 25
+ - 46
+ - 60
+ - 81
+ - 153
 # Sentinel-2 (S2) settings
 sentinel_2:
   collection: "sentinel-2-l2a"
@@ -10,7 +28,21 @@ sentinel_2:
     - "2023-10-01/2023-12-31"  # OND (Oct-Nov-Dec)
   cloud_cover: 50  # Maximum allowed cloud cover percentage
   nodata_pixel_percentage : 5 # Maximum missing data percentage
-  bands: ["B02", "B03", "B04", "B08", "B11", "B12", "SCL"]  # Blue, Green, Red, NIR, SWIR1, SWIR2
+  bands:
+  - "B01"
+  - "B02"
+  - "B03"
+  - "B04"
+  - "B05"
+  - "B06"
+  - "B07"
+  - "B08"
+  - "B8A"
+  - "B09"
+  - "B10"
+  - "B11"
+  - "B12"
+  - "SCL"
   cloud_band: "SCL"
   resolution: 10  # Spatial resolution in meters
   native_crs: True
@@ -28,8 +60,20 @@ landsat:
   collection: "landsat-c2-l2"
   platforms: ["landsat-8", "landsat-9"]
   cloud_cover: 50  # Maximum allowed cloud cover percentage
-  nodata_pixel_percentage : 5 # Maximum missing data percentage
-  bands: ["blue", "green", "red", "nir08", "swir16", "swir22", "qa_pixel"]  # Blue, Green, Red, NIR, SWIR1, SWIR2
+  # landsat does not have a nodata pixel percentage property
+  bands:
+  - "coastal"    # Coastal/Aerosol (Band 1)
+  - "blue"       # Blue (Band 2)
+  - "green"      # Green (Band 3)
+  - "red"        # Red (Band 4)
+  - "nir08"      # Near Infrared (NIR, Band 5)
+  - "swir16"     # Shortwave Infrared 1 (SWIR1, Band 6)
+  - "swir22"     # Shortwave Infrared 2 (SWIR2, Band 7)
+  - "pan"        # Panchromatic (Band 8)
+  - "cirrus"     # Cirrus (Band 9)
+  - "tir10"      # Thermal Infrared 1 (TIR1, Band 10)
+  - "tir11"      # Thermal Infrared 2 (TIR2, Band 11)
+  - "qa_pixel"   # Quality Assessment Pixel Mask  # Blue, Green, Red, NIR, SWIR1, SWIR2
   cloud_band: "qa_pixel"
   resolution: 10  # Spatial resolution in meters
   native_crs: False # False gets crs of S2, True gets crs of first Landsat scene
@@ -50,6 +94,3 @@ chips:
   sample_size: 64  # Size of samples for homogeneity check
   chip_size: 64  # Final chip size for training data
 
-# Metadata
-metadata:
-  file: "metadata.csv"
