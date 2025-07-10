@@ -16,6 +16,7 @@ import yaml
 from dask.distributed import Client, LocalCluster
 import logging
 from pathlib import Path
+import shutil
 
 
 def generate_dataset(config_path):
@@ -26,10 +27,16 @@ def generate_dataset(config_path):
 
     with open(config_path, "r") as file:
         config = yaml.safe_load(file)
-    
-    version = config['aoi']['version']
-    aoi_path = (f'/home/benchuser/code/data/map_{version}.geojson')
+
+    dataset_version = config['dataset']['version']
+    working_dir = Path(config['working_dir'])
+    output_dir = Path(config['output_dir'])
+    metadata_filename = config['metadata']['file']
+    aoi_version = config['aoi']['version']
+    aoi_path = (f'/home/benchuser/code/data/map_{aoi_version}.geojson')
     aoi_gdf = gpd.read_file(aoi_path)
+
+    shutil.copy(config_path, working_dir / "config.yaml")
 
     aoi_gdf = aoi_gdf.drop(config['excluded_aoi_indices'])
     
@@ -52,24 +59,28 @@ def generate_dataset(config_path):
 
     # try to find existing metadata df, else fall back to start of code
     try:
-        metadata_df = pd.read_csv(Path(config['working_dir']) / 'metadata_df.csv')
+        metadata_df = pd.read_csv(working_dir / metadata_filename)
     except:
         metadata_df = pd.DataFrame(columns=["chip_id", "aoi_index", "s2_dates", "s1_dts", "landsat_dts", "lc", "x_center", "y_center", "epsg"])
     for index, aoi in aoi_gdf.iterrows():
+        
         if index in metadata_df['aoi_index'].values:
             print(f"\nAOI at index {index} already processed, continuing to next")
             continue
+            
         print(f"\nProcessing AOI at index {index}")
+        
         aoi_bounds = aoi['geometry'].bounds
         s2_items = pystac.item_collection.ItemCollection([])
-        for date_range in config["sentinel_2"]["time_ranges"]:        
+        
+        for date_range in config["sentinel_2"]["time_ranges"]:   
+            print(f"Searching Sentinel-2 scenes for {date_range}")
             s2_items_season = search_s2_scenes(aoi, date_range, catalog, config)
             s2_items += s2_items_season
     
         if len(s2_items)<4:
             print(f"Missing Sentinel-2 scenes for AOI {aoi_bounds}")
             continue
-            
     
         s2_stack = stack_data(s2_items, "sentinel_2", config)
         if s2_stack is None:
@@ -85,41 +96,59 @@ def generate_dataset(config_path):
         landsat_items = pystac.item_collection.ItemCollection([])
     
         for s2_item in s2_items:
+            
             s2_datetime = s2_item.datetime
+            print(f"Searching Sentinel-1 and Landsat scenes close to {s2_datetime}")
             s1_item = search_s1_scenes(aoi, s2_datetime, catalog, config)
             s1_items += s1_item
             landsat_item = search_landsat_scenes(aoi, s2_datetime, catalog, config)
             landsat_items += landsat_item
+        
+        if len(landsat_items) < 4:
+            print(f"Missing Landsat Scenes for AOI {aoi_bounds}")
+            continue
+
+        if len(s1_items) < 4:
+            print(f"Missing S1 scenes for AOI {aoi_bounds}")
+            continue
     
+        print("stacking Sentinel-1 data...")
         s1_stack = stack_data(s1_items, "sentinel_1", config, s2_stack.rio.crs.to_epsg(), s2_items[0].bbox)
         if s1_stack is None:
             print(f"Failed to stack Sentinel-1 bands for AOI {aoi_bounds}")
             continue
-    
+        
+        print("stacking Landsat data...")
         landsat_stack = stack_data(landsat_items, "landsat", config, s2_stack.rio.crs.to_epsg(), s2_items[0].bbox)
         if landsat_stack is None:
             print(f"Failed to stack Landsat bands for AOI {aoi_bounds}")
             continue
-             
+
+        print("searching Land Cover data...")
         lc_items = search_lc_scene(s2_items[0].bbox, catalog, config)
         if not lc_items:
             print(f"No Land Cover data found for AOI {aoi_bounds}")
             continue
-        
+
+        print("stacking Land Cover data...")
         lc_stack = stack_lc_data(lc_items, config, s2_stack.rio.crs.to_epsg(), s2_items[0].bbox)
         if lc_stack is None:
             print(f"Failed to stack Land Cover data for AOI {aoi_bounds} and date range {date_range}")
             continue
-    
+
+        print("searching DEM data...")
         dem_items = search_dem_scene(s2_items[0].bbox, catalog, config)
         if not dem_items:
             print(f"No DEM data found for AOI {aoi_bounds}")
             continue
-        
+
+        print("stacking DEM data...")
         dem_stack = stack_dem_data(dem_items, config, s2_stack.rio.crs.to_epsg(), s2_items[0].bbox)
         if dem_stack is None:
             print(f"Failed to stack DEM data for AOI {aoi_bounds} and date range {date_range}")
             continue    
+
+        print("processing chips...")
         global_index, metadata_df = process_chips(s2_stack,
                                                   s1_stack,
                                                   landsat_stack,
@@ -131,10 +160,11 @@ def generate_dataset(config_path):
                                                   global_index,
                                                   index,
                                                   metadata_df,
-                                                  config['working_dir']
+                                                  str(working_dir)
                                                  )
         
-        metadata_df.to_csv(Path(config['working_dir']) / 'metadata_df.csv', index=False)
+        metadata_df.to_csv(working_dir / metadata_filename, index=False)
+        
         
 def process_array( 
             stack, 
@@ -143,6 +173,7 @@ def process_array(
             array_name: str,
             sample_size: int = 64,
             chip_size: int = 64,
+            fill_na: bool = True,
             na_value: int = -999,
             dtype = np.int16,
             ):
@@ -159,8 +190,9 @@ def process_array(
                               (array.y > stack.y[(y + 1) * sample_size])
                              )
 
-    array = array.fillna(na_value)
-    array = array.rio.write_nodata(na_value)
+    if fill_na:
+        array = array.fillna(na_value)
+        array = array.rio.write_nodata(na_value)
     array = array.astype(np.dtype(dtype))
     array = array.rename(array_name)
 
@@ -234,7 +266,8 @@ def process_chips(s2_stack, s1_stack, landsat_stack, lc_stack, dem_stack, epsg, 
             array_name = 'S2',
             sample_size = sample_size,
             chip_size = chip_size,
-            na_value = -999 ,
+            fill_na = False, # so we can check for missing values
+            na_value = None,
             dtype = np.int16,
         )
 
@@ -248,7 +281,8 @@ def process_chips(s2_stack, s1_stack, landsat_stack, lc_stack, dem_stack, epsg, 
             array_name = 'S1',
             sample_size = sample_size,
             chip_size = chip_size,
-            na_value = -999 ,
+            fill_na = False,
+            na_value = None,
             dtype = np.float32,
         )
 
@@ -262,11 +296,12 @@ def process_chips(s2_stack, s1_stack, landsat_stack, lc_stack, dem_stack, epsg, 
             array_name = 'L8',
             sample_size = sample_size,
             chip_size = chip_size,
-            na_value = -999 ,
+            fill_na = False,
+            na_value = None,
             dtype = np.float32,
         )
 
-        if missing_values(s1_array, chip_size, sample_size):
+        if missing_values(landsat_array, chip_size, sample_size):
             continue 
 
         lc_array = process_array(
@@ -276,7 +311,8 @@ def process_chips(s2_stack, s1_stack, landsat_stack, lc_stack, dem_stack, epsg, 
             array_name = 'lc',
             sample_size = sample_size,
             chip_size = chip_size,
-            na_value = 0,
+            fill_na = False,
+            na_value = None,
             dtype = np.int8,
         )
         
@@ -290,7 +326,8 @@ def process_chips(s2_stack, s1_stack, landsat_stack, lc_stack, dem_stack, epsg, 
             array_name = 'dem',
             sample_size = sample_size,
             chip_size = chip_size,
-            na_value = -999,
+            fill_na = False,
+            na_value = None,
             dtype = np.float32,
         )
 

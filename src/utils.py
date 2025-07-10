@@ -188,14 +188,14 @@ def unique_class(window, axis=None, **kwargs):
     return np.all(window == window[0, 0], axis=axis)
 
 def missing_values(array, chip_size, sample_size):
-    """Check if the given S2/LC stacked array contains NaN values over the cenrtal sample area."""
+    """Check if the given S2/LC stacked array contains NaN values over the central sample area."""
     array_trimmed = array.isel(x = slice(int((chip_size - sample_size) / 2), int((chip_size + sample_size) / 2)), 
                                y = slice(int((chip_size - sample_size) / 2), int((chip_size + sample_size) / 2))
                               )
     has_nan = array_trimmed.isnull().any()
     return has_nan
     
-def save_multitemproal_chips(array, root_path, index):
+def save_multitemporal_chips(array, root_path, index):
     dts = []
     for i, dt in enumerate(array.time.values):
         ts = pd.to_datetime(str(dt)) 
@@ -265,9 +265,9 @@ def gen_chips(s2_array, s1_array, landsat_array, lc_array, dem_array, index, roo
     dem_path = f"{root_path}/dem_{index:06}.tif"
     s2_dts, s1_dts, landsat_dts = [], [], []
     try:
-        s2_dts = save_multitemproal_chips(s2_array, root_path, index)
-        s1_dts = save_multitemproal_chips(s1_array, root_path, index)
-        landsat_dts = save_multitemproal_chips(landsat_array, root_path, index)
+        s2_dts = save_multitemporal_chips(s2_array, root_path, index)
+        s1_dts = save_multitemporal_chips(s1_array, root_path, index)
+        landsat_dts = save_multitemporal_chips(landsat_array, root_path, index)
 
         save_thumbnails(s2_array, root_path, index)
         save_thumbnails(landsat_array, root_path, index)
