@@ -113,10 +113,10 @@ def search_lc_scene(bbox, catalog, config):
     return items
 
 def stack_data(items, platform, config, epsg=None, bbox=None):
-    if bbox == None:
+    if bbox is None:
         bbox = items[0].bbox
     
-    if config[platform]["native_crs"] == True:
+    if config[platform]["native_crs"]:
         try:
             epsg = items[0].properties["proj:epsg"]
         except:
@@ -147,7 +147,7 @@ def stack_dem_data(items, config, epsg=None, bbox=None):
     if not items:
         print("No dem data found.")
         return None
-    if config["dem"]["native_crs"] == True:
+    if config["dem"]["native_crs"]:
         try:
             epsg = items[0].properties["proj:epsg"]
         except:
@@ -170,11 +170,16 @@ def stack_lc_data(lc_items, config, epsg, bbox):
     if not lc_items:
         print("No Land Cover data found.")
         return None
+    if config["land_cover"]["native_crs"]:
+        try:
+            epsg = lc_items[0].properties["proj:epsg"]
+        except:
+            epsg = int(lc_items[0].properties["proj:code"].split(":")[-1])
     try:
         stacked_data = stackstac.stack(
             lc_items,
             epsg=epsg,
-            resolution=config["sentinel_2"]["resolution"],
+            resolution=config["land_cover"]["resolution"],
             bounds_latlon=bbox,
         ).median("time", skipna=True).squeeze()
         stacked_data = stacked_data.chunk(chunks={"x": -1, "y": "auto"})
