@@ -1,6 +1,6 @@
 # Configuration file for chip generation
 dataset:
-  version: "v0.40"
+  version: "test"
 
 aoi:
   version: "v0.30"
@@ -23,12 +23,12 @@ excluded_aoi_indices:
 sentinel_2:
   collection: "sentinel-2-l2a"
   time_ranges:
-    - "2023-01-01/2023-03-31" # (Jan-Feb-Mar)
-    - "2023-04-01/2023-06-30" # (Apr-May-Jun)
-    - "2023-07-01/2023-09-30" # (Jul-Aug-Sep)
-    - "2023-10-01/2023-12-31" # (Oct-Nov-Dec)
-  cloud_cover: 50  # Maximum allowed cloud cover percentage in scene
-  nodata_pixel_percentage : 5 # Maximum missing data percentage in scene
+    - "2023-01-01/2023-03-31"  # JFM (Jan-Feb-Mar)
+    - "2023-04-01/2023-06-30"  # AMJ (Apr-May-Jun)
+    - "2023-07-01/2023-09-30"  # JAS (Jul-Aug-Sep)
+    - "2023-10-01/2023-12-31"  # OND (Oct-Nov-Dec)
+  cloud_cover: 50  # Maximum allowed cloud cover percentage
+  nodata_pixel_percentage : 5 # Maximum missing data percentage
   bands:
   - "B01"
   - "B02"
@@ -51,7 +51,7 @@ sentinel_2:
 # Sentinel-1 (S1) settings
 sentinel_1:
   collection: "sentinel-1-rtc"
-  nodata_pixel_percentage : 5 # Maximum missing data percentage in scene
+  nodata_pixel_percentage : 5 # Maximum missing data percentage
   bands: ["vv", "vh"]  # VV, VH
   resolution: 10  # Spatial resolution in meters
   native_crs: False # False gets crs of S2, True gets crs of first Landsat scene
@@ -60,7 +60,7 @@ sentinel_1:
 landsat:
   collection: "landsat-c2-l2"
   platforms: ["landsat-8", "landsat-9"]
-  cloud_cover: 50  # Maximum allowed cloud cover percentage in scene
+  cloud_cover: 50  # Maximum allowed cloud cover percentage
   # landsat does not have a nodata pixel percentage property
   bands:
   - "coastal"    # Coastal/Aerosol (Band 1)
@@ -76,21 +76,19 @@ landsat:
   - "tir11"      # Thermal Infrared 2 (TIR2, Band 11)
   - "qa_pixel"   # Quality Assessment Pixel Mask  # Blue, Green, Red, NIR, SWIR1, SWIR2
   cloud_band: "qa_pixel"
-  resolution: 30  # Spatial resolution in meters
+  resolution: 10  # Spatial resolution in meters
   native_crs: False # False gets crs of S2, True gets crs of first Landsat scene
 
 dem:
   collection: "cop-dem-glo-30"
   year: "2021-01-02/2021-12-31"
-  resolution: 30  # Spatial resolution in meters
+  resolution: 10  # Spatial resolution in meters
   native_crs: False # False gets crs of S2
 
 # Land Cover (LC) settings
 land_cover:
   collection: "io-lulc-annual-v02"
   year: "2023-01-02/2023-12-31" # Year for the land cover dataset
-  resolution: 10
-  native_crs: False # False gets crs of S2
   # sampling_factor is used to even out samples of different land cover classes
   # it is equal to the count of the largest category divided by the count of the smallest category in the final dataset
   # sampling_factor of 1 forces equal distribution for all classes
@@ -98,6 +96,6 @@ land_cover:
   
 # Chip settings
 chips:
-  sample_size: 960  # Size of samples for homogeneity check in meters
-  chip_size: 960  # Final chip size for training data in meters
+  sample_size: 64  # Size of samples for homogeneity check
+  chip_size: 64  # Final chip size for training data
 
