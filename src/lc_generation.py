@@ -17,17 +17,40 @@ from dask.distributed import Client, LocalCluster
 import logging
 from pathlib import Path
 import shutil
+from functools import reduce
+from shapely import box
+
+
+def pystac_itemcollection_to_gdf(item_collection):
+    geometries = []
+    properties = []
+    for item in item_collection:
+        # Create box geometry from bbox
+        bbox = item.bbox
+        geom = box(bbox[0], bbox[1], bbox[2], bbox[3])
+        geometries.append(geom)
+        
+        # Collect properties
+        props = {
+            'collection': item.collection_id,
+        }
+        properties.append(props)
+    
+    # Create GeoDataFrame
+    gdf = gpd.GeoDataFrame(properties, geometry=geometries, crs='EPSG:4326')
+    
+    return gdf
 
 
 def generate_dataset(config_path):
+    
     warnings.filterwarnings("ignore")
     logging.getLogger("distributed").setLevel(logging.ERROR)
     logging.getLogger("dask").setLevel(logging.ERROR)
     
-
     with open(config_path, "r") as file:
         config = yaml.safe_load(file)
-
+    
     version = config['dataset']['version']
     working_dir = Path(config['working_dir'])
     output_dir = Path(config['output_dir'])
@@ -35,12 +58,9 @@ def generate_dataset(config_path):
     metadata_filename = config['metadata']['file']
     aoi_version = config['aoi']['version']
     
-    aoi_path = (f'/home/benchuser/code/data/map_{aoi_version}.geojson')
-    aoi_gdf = gpd.read_file(aoi_path)
-
+    (working_dir / version).mkdir(exist_ok=True)
     shutil.copy(config_path, working_dir / version / "config.yaml")
-
-    aoi_gdf = aoi_gdf.drop(config['excluded_aoi_indices'])
+    
     
     cluster = LocalCluster(silence_logs=logging.ERROR)
     client = Client(cluster)
@@ -56,115 +76,159 @@ def generate_dataset(config_path):
         modifier=planetary_computer.sign_inplace,
         stac_io=stac_api_io
     )
-    
-    global_index = 0
 
-    # try to find existing metadata df, else fall back to start of code
+    
     try:
+        aoi_path = (working_dir / version / f'{aoi_version}.geojson')
+        aoi_gdf = gpd.read_file(aoi_path)
+        aoi_gdf = aoi_gdf.drop(aoi_gdf[aoi_gdf['processed']].index)
         metadata_df = pd.read_csv(working_dir / version / metadata_filename)
-    except:
-        metadata_df = pd.DataFrame(columns=["chip_id", "aoi_index", "s2_dates", "s1_dts", "landsat_dts", "lc", "x_center", "y_center", "epsg"])
+        global_index = metadata_df['chip_id'].max() + 1
+    except: 
+        aoi_path = (f'/home/benchuser/code/data/map_{aoi_version}.geojson')
+        aoi_gdf = gpd.read_file(aoi_path)
+        aoi_gdf['processed'] = False
+        aoi_gdf.to_file(working_dir / version / f'{aoi_version}.geojson', driver = 'GeoJSON')
+        metadata_df = pd.DataFrame(columns=["chip_id", "aoi_index", "s2_dates", "s1_dates", "landsat_dates", "lc", "x_center", "y_center", "epsg"])
+        global_index = 0
+
+    aoi_gdf = aoi_gdf.drop(config['excluded_aoi_indices'])
+    aoi_path = working_dir / version / f'{aoi_version}.geojson'
+    
     for index, aoi in aoi_gdf.iterrows():
-        
-        if index in metadata_df['aoi_index'].values:
-            print(f"\nAOI at index {index} already processed, continuing to next")
-            continue
-            
-        print(f"\nProcessing AOI at index {index}")
-        
-        aoi_bounds = aoi['geometry'].bounds
-        s2_items = pystac.item_collection.ItemCollection([])
-        
-        for date_range in config["sentinel_2"]["time_ranges"]:   
-            print(f"Searching Sentinel-2 scenes for {date_range}")
-            s2_items_season = search_s2_scenes(aoi, date_range, catalog, config)
-            s2_items += s2_items_season
-    
-        if len(s2_items)<4:
-            print(f"Missing Sentinel-2 scenes for AOI {aoi_bounds}")
-            continue
-    
-        s2_stack = stack_data(s2_items, "sentinel_2", config)
-        if s2_stack is None:
-            print(f"Failed to stack Sentinel-2 bands for AOI {aoi_bounds}")
-            continue
         try:
-            epsg = s2_items[0].properties["proj:epsg"]
-        except:
-            epsg = int(s2_items[0].properties["proj:code"].split(":")[-1])
-        bbox = s2_items[0].bbox
+            global_index, metadata_df = process_aoi(
+                index,
+                aoi,
+                config,
+                catalog,
+                global_index,
+                metadata_df,
+                working_dir,
+                version,
+                metadata_filename
+            )
+        finally:
+            aoi_gdf.loc[index, 'processed'] = True
+            aoi_gdf.to_file(aoi_path, driver='GeoJSON')
+
+def process_aoi(
+    index,
+    aoi,
+    config,
+    catalog,
+    global_index,
+    metadata_df,
+    working_dir,
+    version,
+    metadata_filename
+):
     
-        s1_items = pystac.item_collection.ItemCollection([])
-        landsat_items = pystac.item_collection.ItemCollection([])
+    print(f"\nProcessing AOI at index {index}")
     
-        for s2_item in s2_items:
-            s2_datetime = s2_item.datetime
-            print(f"Searching Sentinel-1 and Landsat scenes close to {s2_datetime}")
-            s1_item = search_s1_scenes(aoi, s2_datetime, catalog, config)
-            s1_items += s1_item
-            landsat_item = search_landsat_scenes(aoi, s2_datetime, catalog, config)
-            landsat_items += landsat_item
-        
-        if len(landsat_items) < 4:
-            print(f"Missing Landsat Scenes for AOI {aoi_bounds}")
-            continue
+    aoi_bounds = aoi['geometry'].bounds
+    s2_items = pystac.item_collection.ItemCollection([])
+    
+    for date_range in config["sentinel_2"]["time_ranges"]:   
+        print(f"Searching Sentinel-2 scenes for {date_range}")
+        s2_items_season = search_s2_scenes(aoi, date_range, catalog, config)
+        s2_items += s2_items_season
 
-        if len(s1_items) < 4:
-            print(f"Missing S1 scenes for AOI {aoi_bounds}")
-            continue
-        
-        print("stacking Sentinel-1 data...")
-        s1_stack = stack_data(s1_items, "sentinel_1", config, epsg, bbox)
-        if s1_stack is None:
-            print(f"Failed to stack Sentinel-1 bands for AOI {aoi_bounds}")
-            continue
-                
-        print("stacking Landsat data...")
-        landsat_stack = stack_data(landsat_items, "landsat", config, epsg, bbox)
-        if landsat_stack is None:
-            print(f"Failed to stack Landsat bands for AOI {aoi_bounds}")
-            continue
+    if len(s2_items)<4:
+        print(f"Missing Sentinel-2 scenes for AOI {aoi_bounds}")
+        return global_index, metadata_df
 
-        print("searching Land Cover data...")
-        lc_items = search_lc_scene(bbox, catalog, config)
-        if not lc_items:
-            print(f"No Land Cover data found for AOI {aoi_bounds}")
-            continue
-        
-        print("stacking Land Cover data...")
-        lc_stack = stack_lc_data(lc_items, config, epsg, bbox)
-        if lc_stack is None:
-            print(f"Failed to stack Land Cover data for AOI {aoi_bounds} and date range {date_range}")
-            continue
+    try:
+        epsg = s2_items[0].properties["proj:epsg"]
+    except:
+        epsg = int(s2_items[0].properties["proj:code"].split(":")[-1])
+    bbox_latlon = s2_items[0].bbox
 
-        print("searching DEM data...")
-        dem_items = search_dem_scene(bbox, catalog, config)
-        if not dem_items:
-            print(f"No DEM data found for AOI {aoi_bounds}")
-            continue
+    s1_items = pystac.item_collection.ItemCollection([])
+    landsat_items = pystac.item_collection.ItemCollection([])
 
-        print("stacking DEM data...")
-        dem_stack = stack_dem_data(dem_items, config,  epsg, bbox)
-        if dem_stack is None:
-            print(f"Failed to stack DEM data for AOI {aoi_bounds} and date range {date_range}")
-            continue    
+    for s2_item in s2_items:
+        s2_datetime = s2_item.datetime
+        print(f"Searching Sentinel-1 and Landsat scenes close to {s2_datetime}")
+        s1_item = search_s1_scenes(aoi, s2_datetime, catalog, config)
+        s1_items += s1_item
+        landsat_item = search_landsat_scenes(aoi, s2_datetime, catalog, config)
+        landsat_items += landsat_item
+    
+    if len(landsat_items) < 4:
+        print(f"Missing Landsat Scenes for AOI {aoi_bounds}")
+        return global_index, metadata_df
 
-        print("processing chips...")
-        global_index, metadata_df = process_chips(s2_stack,
-                                                  s1_stack,
-                                                  landsat_stack,
-                                                  lc_stack,
-                                                  dem_stack,
-                                                  epsg,
-                                                  config,
-                                                  global_index,
-                                                  index,
-                                                  metadata_df,
-                                                  str(working_dir / version)
-                                                 )
-        
-        metadata_df.to_csv(working_dir / version / metadata_filename, index=False)
-        
+    if len(s1_items) < 4:
+        print(f"Missing S1 scenes for AOI {aoi_bounds}")
+        return global_index, metadata_df
+            
+    print("searching Land Cover data...")
+    lc_items = search_lc_scene(aoi, catalog, config)
+    if not lc_items:
+        print(f"No Land Cover data found for AOI {aoi_bounds}")
+        return global_index, metadata_df
+    
+    print("searching DEM data...")
+    dem_items = search_dem_scene(aoi, catalog, config)
+    if not dem_items:
+        print(f"No DEM data found for AOI {aoi_bounds}")
+        return global_index, metadata_df
+
+        # first, get area of overlap of all item bboxes
+    itemcollections = [s2_items, s1_items, landsat_items, lc_items, dem_items]
+    bbox_gdf = pd.concat([pystac_itemcollection_to_gdf(items) for items in itemcollections])
+    combined_geoms = bbox_gdf.groupby('collection')['geometry'].apply(lambda x: x.unary_union)
+    overlap = reduce(lambda x, y: x.intersection(y), combined_geoms)
+    overlap_bounds = overlap.bounds
+    
+    print("stacking Landsat data...")
+    landsat_stack = stack_data(landsat_items, "landsat", config, epsg, overlap_bounds, bbox_is_latlon=True)
+    if landsat_stack is None:
+        print(f"Failed to stack Landsat bands for AOI {aoi_bounds}")
+        return global_index, metadata_df
+    
+    overlap_bbox = landsat_stack.rio.bounds()
+
+    print("stacking Sentinel-2 data...")
+    s2_stack = stack_data(s2_items, "sentinel_2", config, epsg, overlap_bbox, bbox_is_latlon=False)
+    if s2_stack is None:
+        print(f"Failed to stack Sentinel-2 bands for AOI {aoi_bounds}")
+        return global_index, metadata_df
+
+    print("stacking DEM data...")
+    dem_stack = stack_dem_data(dem_items, config,  epsg, overlap_bbox)
+    if dem_stack is None:
+        print(f"Failed to stack DEM data for AOI {aoi_bounds} and date range {date_range}")
+        return global_index, metadata_df
+    print("stacking Land Cover data...")
+    lc_stack = stack_lc_data(lc_items, config, epsg, overlap_bbox)
+    if lc_stack is None:
+        print(f"Failed to stack Land Cover data for AOI {aoi_bounds} and date range {date_range}")
+        return global_index, metadata_df
+
+    print("stacking Sentinel-1 data...")
+    s1_stack = stack_data(s1_items, "sentinel_1", config, epsg, overlap_bbox, bbox_is_latlon=False)
+    if s1_stack is None:
+        print(f"Failed to stack Sentinel-1 bands for AOI {aoi_bounds}")
+        return global_index, metadata_df
+
+    print("processing chips...")
+    global_index, metadata_df = process_chips(s2_stack,
+                                              s1_stack,
+                                              landsat_stack,
+                                              lc_stack,
+                                              dem_stack,
+                                              epsg,
+                                              config,
+                                              global_index,
+                                              index,
+                                              metadata_df,
+                                              str(working_dir / version)
+                                             )
+    
+    metadata_df.to_csv(working_dir / version / metadata_filename, index=False)
+    return global_index, metadata_df
         
 def process_array( 
             stack, 
@@ -180,9 +244,12 @@ def process_array(
     x, y = coords
     sample_size = int(config['chips']['sample_size'] / config[array_name]['resolution'])
     chip_size = int(config['chips']['chip_size'] / config[array_name]['resolution'])
-
-    x_indices = slice((x) * sample_size - int((chip_size - sample_size)/2), (x + 1) * sample_size + int((chip_size - sample_size)/2))
-    y_indices = slice((y) * sample_size - int((chip_size - sample_size)/2), (y + 1) * sample_size + int((chip_size - sample_size)/2))    
+    min_x_index = (x) * sample_size - int((chip_size - sample_size)/2)
+    max_x_index = (x + 1) * sample_size + int((chip_size - sample_size)/2)
+    min_y_index = (y) * sample_size - int((chip_size - sample_size)/2)
+    max_y_index = (y + 1) * sample_size + int((chip_size - sample_size)/2)
+    x_indices = slice(min_x_index, max_x_index)
+    y_indices = slice(min_y_index, max_y_index)    
 
     array = stack.isel(x = x_indices, y = y_indices)
     array.rio.write_crs(f"epsg:{epsg}", inplace=True)
@@ -263,7 +330,7 @@ def process_chips(s2_stack, s1_stack, landsat_stack, lc_stack, dem_stack, epsg, 
     for index in range(0, len(ys)):
         x = xs[index]
         y = ys[index]
-
+        
         
         s2_array = process_array(
             stack = s2_stack, 
@@ -276,6 +343,10 @@ def process_chips(s2_stack, s1_stack, landsat_stack, lc_stack, dem_stack, epsg, 
             dtype = np.int16,
         )
 
+        if len(s2_array.time.values) < 4:
+            print("Missing scenes in S2 array")
+            continue
+        
         if s2_array is None:
             print("Missing values in S2 array")
             continue    
@@ -295,6 +366,10 @@ def process_chips(s2_stack, s1_stack, landsat_stack, lc_stack, dem_stack, epsg, 
             print("Missing values in S1 array")
             continue 
 
+        if len(s2_array.time.values) < 4:
+            print("Missing scenes in S1 array")
+            continue
+
         landsat_array = process_array(
             stack = landsat_stack, 
             epsg = epsg, 
@@ -309,6 +384,10 @@ def process_chips(s2_stack, s1_stack, landsat_stack, lc_stack, dem_stack, epsg, 
         if landsat_array is None:
             print("Missing values in landsat array")
             continue 
+
+        if len(s2_array.time.values) < 4:
+            print("Missing scenes in landsat array")
+            continue
 
         lc_array = process_array(
             stack = lc_stack, 

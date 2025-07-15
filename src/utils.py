@@ -94,25 +94,34 @@ def search_landsat_scenes(aoi, s2_datetime, catalog, config):
 
     return landsat_collection
 
-def search_dem_scene(bbox, catalog, config):
+def search_dem_scene(aoi, catalog, config):
     lc_search = catalog.search(
         collections=config["dem"]["collection"],
-        bbox=bbox,
+        bbox=aoi['geometry'].bounds,
         datetime=config["dem"]["year"]
     )
     items = lc_search.item_collection()
     return items
 
-def search_lc_scene(bbox, catalog, config):
+def search_lc_scene(aoi, catalog, config):
     lc_search = catalog.search(
         collections=config["land_cover"]["collection"],
-        bbox=bbox,
+        bbox=aoi['geometry'].bounds,
         datetime=config["land_cover"]["year"]
     )
     items = lc_search.item_collection()
     return items
 
-def stack_data(items, platform, config, epsg=None, bbox=None):
+def adjust_bbox_to_resolution(bbox, resolution):
+    '''Adjusts bbox from rioxarray.rio output so stackstac snaps to grid correctly'''
+    # this function gets the bbox which intersects the centers of all pixels we want from stackstac
+    r = resolution / 2
+    minx, miny, maxx, maxy = bbox
+    bbox_adjusted = (minx + r, miny, maxx, maxy - r)
+    return bbox_adjusted
+
+def stack_data(items, platform, config, epsg=None, bbox=None, bbox_is_latlon=True):
+
     if bbox is None:
         bbox = items[0].bbox
     
@@ -121,7 +130,13 @@ def stack_data(items, platform, config, epsg=None, bbox=None):
             epsg = items[0].properties["proj:epsg"]
         except:
             epsg = int(items[0].properties["proj:code"].split(":")[-1])
-            
+    
+    bounds_param = "bounds_latlon" if bbox_is_latlon else "bounds"
+    if not bbox_is_latlon:
+        resolution = config[platform]["resolution"]
+        bbox = adjust_bbox_to_resolution(bbox, resolution)
+    bounds_kwargs = {bounds_param: bbox}
+
     try:
         item_stack = stackstac.stack(
             items,
@@ -129,8 +144,13 @@ def stack_data(items, platform, config, epsg=None, bbox=None):
             epsg=epsg,
             resolution=config[platform]["resolution"],
             fill_value=np.nan,
-            bounds_latlon = bbox
+            **bounds_kwargs
         )
+        if len(item_stack.band) != len(config[platform]["bands"]) or len(item_stack.time) != 4:
+            print("Not all data stacked by stackstac.stack!")
+            print(f"{platform} stack has {len(item_stack.band)}/{len(config[platform]["bands"])} bands and {len(item_stack.time)} time steps")
+            print(f"{platform} bands: {item_stack.band.values.tolist()}")
+            return None
         if platform in ['sentinel_2', 'landsat']:
             item_stack = mask_cloudy_pixels(item_stack, platform)
             item_stack = item_stack.drop_sel(band=config[platform]['cloud_band'])
@@ -138,10 +158,10 @@ def stack_data(items, platform, config, epsg=None, bbox=None):
         else: 
             item_stack = item_stack.chunk(chunks={"band": len(config[platform]["bands"]), "x": -1, "y": "auto"})
             
-        return item_stack
     except Exception as e:
         print(f"Error stacking {platform} data: {e}")
         return None
+    return item_stack
 
 def stack_dem_data(items, config, epsg=None, bbox=None):
     if not items:
@@ -152,12 +172,14 @@ def stack_dem_data(items, config, epsg=None, bbox=None):
             epsg = items[0].properties["proj:epsg"]
         except:
             epsg = int(items[0].properties["proj:code"].split(":")[-1])
+    resolution = config["dem"]["resolution"]
+    bbox = adjust_bbox_to_resolution(bbox, resolution)
     try:
         stacked_data = stackstac.stack(
             items,
             epsg=epsg,
             resolution=config["dem"]["resolution"],
-            bounds_latlon=bbox,
+            bounds=bbox,
         ).median("time", skipna=True).squeeze()
         stacked_data = stacked_data.chunk(chunks={"x": -1, "y": "auto"})
         return stacked_data
@@ -175,12 +197,14 @@ def stack_lc_data(lc_items, config, epsg, bbox):
             epsg = lc_items[0].properties["proj:epsg"]
         except:
             epsg = int(lc_items[0].properties["proj:code"].split(":")[-1])
+    resolution = config["land_cover"]["resolution"]
+    bbox = adjust_bbox_to_resolution(bbox, resolution)
     try:
         stacked_data = stackstac.stack(
             lc_items,
             epsg=epsg,
             resolution=config["land_cover"]["resolution"],
-            bounds_latlon=bbox,
+            bounds=bbox,
         ).median("time", skipna=True).squeeze()
         stacked_data = stacked_data.chunk(chunks={"x": -1, "y": "auto"})
         return stacked_data
@@ -198,7 +222,9 @@ def missing_values(array, chip_size, sample_size):
                                y = slice(int((chip_size - sample_size) / 2), int((chip_size + sample_size) / 2))
                               )
     has_nan = array_trimmed.isnull().any()
-    return has_nan
+    zero_array = array_trimmed.max() == 0
+    missing_values = has_nan or zero_array
+    return missing_values
     
 def save_multitemporal_chips(array, root_path, index):
     dts = []

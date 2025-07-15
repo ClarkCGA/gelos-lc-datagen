@@ -3,7 +3,7 @@ import pandas as pd
 import ast 
 import geopandas as gpd
 from shapely.geometry import Point
-from utils import get_continent
+from .utils import get_continent
 import yaml
 from pathlib import Path
 import shutil
@@ -75,12 +75,17 @@ def clean_data(config_path):
     (output_dir / version).mkdir(exist_ok=True)
     metadata_gdf.to_csv(output_dir / f'{version}/cleaned_df.csv', index=False)
     for index, row in tqdm(metadata_df.iterrows(), total=len(metadata_gdf), desc="copying files to output dir..."):
-        for col in ["s2_dates", "s1_dts", "landsat_dts"]:
+        for col in ["s2_dates", "s1_dates", "landsat_dates"]:
             for i, date in enumerate(ast.literal_eval(row[col])):
-                platform = platform_name_dict[col.split("_")[0]]
-                src_file = working_dir / version / f"{platform}_{row["original_chip_id"]:06}_{i}_{date}.tif"
+                platform = col.split("_")[0]
+                src_platform = platform_name_dict[platform]
+                src_file = working_dir / version / f"{src_platform}_{row["original_chip_id"]:06}_{i}_{date}.tif"
                 dst_file = output_dir / version / f"{platform}_{row["chip_id"]:06}_{date}.tif"
                 shutil.copy2(src_file, dst_file)
+                if platform == 's2':
+                    src_file = working_dir / version / f"{src_platform}_{row["original_chip_id"]:06}_{i}_{date}.png"
+                    dst_file = output_dir / version / f"{platform}_{row["chip_id"]:06}_{date}.png"
+                    
         src_file = working_dir / version / f"dem_{row["original_chip_id"]:06}.tif"
         dst_file = output_dir / version / f"dem_{row["chip_id"]:06}.tif"
         shutil.copy2(src_file, dst_file)
