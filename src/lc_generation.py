@@ -81,21 +81,23 @@ def generate_dataset(config_path):
     try:
         aoi_path = (working_dir / version / f'{aoi_version}.geojson')
         aoi_gdf = gpd.read_file(aoi_path)
-        aoi_gdf = aoi_gdf.drop(aoi_gdf[aoi_gdf['processed']].index)
         metadata_df = pd.read_csv(working_dir / version / metadata_filename)
         global_index = metadata_df['chip_id'].max() + 1
     except: 
         aoi_path = (f'/home/benchuser/code/data/map_{aoi_version}.geojson')
         aoi_gdf = gpd.read_file(aoi_path)
         aoi_gdf['processed'] = False
+        aoi_gdf = aoi_gdf.drop(config['excluded_aoi_indices'])
         aoi_gdf.to_file(working_dir / version / f'{aoi_version}.geojson', driver = 'GeoJSON')
         metadata_df = pd.DataFrame(columns=["chip_id", "aoi_index", "s2_dates", "s1_dates", "landsat_dates", "lc", "x_center", "y_center", "epsg"])
         global_index = 0
 
-    aoi_gdf = aoi_gdf.drop(config['excluded_aoi_indices'])
     aoi_path = working_dir / version / f'{aoi_version}.geojson'
     
     for index, aoi in aoi_gdf.iterrows():
+        if aoi_gdf.iloc[index]['processed']:
+            print(f'AOI at index {index} already processed, continuing to next...')
+            continue
         try:
             global_index, metadata_df = process_aoi(
                 index,
