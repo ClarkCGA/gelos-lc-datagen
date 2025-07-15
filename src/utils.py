@@ -163,7 +163,7 @@ def stack_data(items, platform, config, epsg=None, bbox=None, bbox_is_latlon=Tru
         return None
     return item_stack
 
-def stack_dem_data(items, config, epsg=None, bbox=None):
+def stack_dem_data(items, config, epsg=None, bbox=None, bbox_is_latlon=False):
     if not items:
         print("No dem data found.")
         return None
@@ -172,23 +172,27 @@ def stack_dem_data(items, config, epsg=None, bbox=None):
             epsg = items[0].properties["proj:epsg"]
         except:
             epsg = int(items[0].properties["proj:code"].split(":")[-1])
-    resolution = config["dem"]["resolution"]
-    bbox = adjust_bbox_to_resolution(bbox, resolution)
+    bounds_param = "bounds_latlon" if bbox_is_latlon else "bounds"
+    if not bbox_is_latlon:
+        resolution = config["dem"]["resolution"]
+        bbox = adjust_bbox_to_resolution(bbox, resolution)
+    bounds_kwargs = {bounds_param: bbox}
     try:
         stacked_data = stackstac.stack(
             items,
             epsg=epsg,
             resolution=config["dem"]["resolution"],
-            bounds=bbox,
+            **bounds_kwargs
         ).median("time", skipna=True).squeeze()
         stacked_data = stacked_data.chunk(chunks={"x": -1, "y": "auto"})
+        
         return stacked_data
         
     except Exception as e:
         print(f"Error stacking dem data: {e}")
         return None
 
-def stack_lc_data(lc_items, config, epsg, bbox):
+def stack_lc_data(lc_items, config, epsg, bbox, bbox_is_latlon=False):
     if not lc_items:
         print("No Land Cover data found.")
         return None
@@ -197,14 +201,17 @@ def stack_lc_data(lc_items, config, epsg, bbox):
             epsg = lc_items[0].properties["proj:epsg"]
         except:
             epsg = int(lc_items[0].properties["proj:code"].split(":")[-1])
-    resolution = config["land_cover"]["resolution"]
-    bbox = adjust_bbox_to_resolution(bbox, resolution)
+    bounds_param = "bounds_latlon" if bbox_is_latlon else "bounds"
+    if not bbox_is_latlon:
+        resolution = config["land_cover"]["resolution"]
+        bbox = adjust_bbox_to_resolution(bbox, resolution)
+    bounds_kwargs = {bounds_param: bbox}
     try:
         stacked_data = stackstac.stack(
             lc_items,
             epsg=epsg,
             resolution=config["land_cover"]["resolution"],
-            bounds=bbox,
+            **bounds_kwargs
         ).median("time", skipna=True).squeeze()
         stacked_data = stacked_data.chunk(chunks={"x": -1, "y": "auto"})
         return stacked_data
