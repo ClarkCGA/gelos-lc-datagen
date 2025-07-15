@@ -82,7 +82,7 @@ def clean_data(config_path):
                 src_file = working_dir / version / f"{src_platform}_{row["original_chip_id"]:06}_{i}_{date}.tif"
                 dst_file = output_dir / version / f"{platform}_{row["chip_id"]:06}_{date}.tif"
                 shutil.copy2(src_file, dst_file)
-                if platform == 's2':
+                if platform in ['s2', 'landsat']:
                     src_file = working_dir / version / f"{src_platform}_{row["original_chip_id"]:06}_{i}_{date}.png"
                     dst_file = output_dir / version / f"{platform}_{row["chip_id"]:06}_{date}.png"
                     
