@@ -343,15 +343,15 @@ def process_chips(s2_stack, s1_stack, landsat_stack, lc_stack, dem_stack, epsg, 
             fill_na = False, # so we can check for missing values
             na_value = None,
             dtype = np.int16,
-        )
+        )      
+        if s2_array is None:
+            print("Missing values in S2 array")
+            continue    
 
         if len(s2_array.time.values) < 4:
             print("Missing scenes in S2 array")
             continue
-        
-        if s2_array is None:
-            print("Missing values in S2 array")
-            continue    
+  
 
         s1_array = process_array(
             stack = s1_stack, 
@@ -428,7 +428,7 @@ def process_chips(s2_stack, s1_stack, landsat_stack, lc_stack, dem_stack, epsg, 
             print("Skipping flooded vegetation")
             continue
         
-        lc = np.unique(lc_array)
+        lc = np.unique(lc_array)[0]
         if lc == 1:
             water_index += 1
             if water_index > 400:
@@ -449,7 +449,7 @@ def process_chips(s2_stack, s1_stack, landsat_stack, lc_stack, dem_stack, epsg, 
             crops_index += 1
             if crops_index > 400:
                 continue
-        print("Generating Chips...")
+        print(f"Generating Chips for chip {global_index}...")
         gen_status, s2_dts, s1_dts, landsat_dts = gen_chips(s2_array, s1_array, landsat_array, lc_array, dem_array, global_index, root_path)
         if gen_status:
             metadata_df = pd.concat([pd.DataFrame([[global_index,
@@ -457,7 +457,7 @@ def process_chips(s2_stack, s1_stack, landsat_stack, lc_stack, dem_stack, epsg, 
                                                     s2_dts,
                                                     s1_dts,
                                                     landsat_dts,
-                                                    np.unique(lc_array),
+                                                    lc,
                                                     lc_stack.x[(x) * lc_sample_size + int(lc_sample_size / 2)].data,
                                                     lc_stack.y[(y) * lc_sample_size + int(lc_sample_size / 2)].data,
                                                     epsg]
