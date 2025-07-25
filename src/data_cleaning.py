@@ -39,34 +39,34 @@ def clean_data(config_path):
     metadata = config['metadata']['file']
     
     metadata_df = pd.read_csv(working_dir / version / metadata)
-    
-    # ensure lc is in int format
-    metadata_df['lc'] = metadata_df['lc'].apply(lambda row: int(row[1:-1]))
+
     # ensure only desired lc classes are present
     metadata_df = metadata_df[metadata_df['lc'].isin([1, 2, 5, 7, 8, 11])]
     
     # get sampling factor, max count, and min count
     sampling_factor = config['land_cover']['sampling_factor']
-    max_count = metadata_df.groupby("lc").count().max().iloc[0]
-    min_count = metadata_df.groupby("lc").count().min().iloc[0]
-    
-    # use sampling factor to calculate correction factor, for proportional class drop quantities
-    max_distance = max_count - min_count
-    max_end_value = min_count * sampling_factor
-    max_distance_to_max_end_value = max_count - max_end_value
-    correction_factor = max_distance_to_max_end_value / max_distance
-    
-    # use correction factor to determine proportion of samples above min to drop for each class
-    # the number of samples dropped will be proportional to the number of samples above minimum
-    # this scales the number of samples between min and min * sampling factor
-    
-    for index, row in metadata_df.groupby("lc").count().iterrows():
-        lc_class = index
-        class_count = row['chip_id']
-        class_distance = class_count - min_count
-        drop_quantity = int(correction_factor * class_distance)
-        metadata_df = drop_rows(metadata_df, lc_class, drop_quantity)
-    
+    if sampling_factor:
+        max_count = metadata_df.groupby("lc").count().max().iloc[0]
+        min_count = metadata_df.groupby("lc").count().min().iloc[0]
+        
+        # use sampling factor to calculate correction factor, for proportional class drop quantities
+        max_distance = max_count - min_count
+        max_end_value = min_count * sampling_factor
+        max_distance_to_max_end_value = max_count - max_end_value
+        correction_factor = max_distance_to_max_end_value / max_distance
+        
+        # use correction factor to determine proportion of samples above min to drop for each class
+        # the number of samples dropped will be proportional to the number of samples above minimum
+        # this scales the number of samples between min and min * sampling factor
+        if max_distance_to_max_end_value <= 0:
+                
+            for index, row in metadata_df.groupby("lc").count().iterrows():
+                lc_class = index
+                class_count = row['chip_id']
+                class_distance = class_count - min_count
+                drop_quantity = int(correction_factor * class_distance)
+                metadata_df = drop_rows(metadata_df, lc_class, drop_quantity)
+        
     metadata_df["index"] = np.arange(0, len(metadata_df))
     metadata_df = metadata_df.rename(columns={"chip_id" : "original_chip_id", "index" : "chip_id"})
     

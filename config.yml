@@ -1,6 +1,6 @@
 # Configuration file for chip generation
 dataset:
-  version: "v0.40"
+  version: "v0.40.1"
 
 aoi:
   version: "v0.30"
@@ -93,7 +93,7 @@ land_cover:
   # sampling_factor is used to even out samples of different land cover classes
   # it is equal to the count of the largest category divided by the count of the smallest category in the final dataset
   # sampling_factor of 1 forces equal distribution for all classes
-  sampling_factor: 10 # int >= 1; leave blank for no class redistribution
+  sampling_factor: # int >= 1; leave blank for no class redistribution
   
 # Chip settings
 chips:
