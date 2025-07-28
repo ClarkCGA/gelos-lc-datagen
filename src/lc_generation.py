@@ -51,6 +51,7 @@ def generate_dataset(config_path):
     with open(config_path, "r") as file:
         config = yaml.safe_load(file)
     
+    log_errors = config['log_errors']
     version = config['dataset']['version']
     working_dir = Path(config['working_dir'])
     output_dir = Path(config['output_dir'])
@@ -87,9 +88,21 @@ def generate_dataset(config_path):
         aoi_path = (f'/home/benchuser/code/data/map_{aoi_version}.geojson')
         aoi_gdf = gpd.read_file(aoi_path)
         aoi_gdf['processed'] = False
+        aoi_gdf['error'] = None
         aoi_gdf = aoi_gdf.drop(config['excluded_aoi_indices'])
         aoi_gdf.to_file(working_dir / version / f'{aoi_version}.geojson', driver = 'GeoJSON')
-        metadata_df = pd.DataFrame(columns=["chip_id", "aoi_index", "s2_dates", "s1_dates", "landsat_dates", "lc", "x_center", "y_center", "epsg"])
+        metadata_df = pd.DataFrame(columns=[
+            "chip_id", 
+            "aoi_index", 
+            "s2_dates", 
+            "s1_dates", 
+            "landsat_dates", 
+            "lc", 
+            "x_center", 
+            "y_center", 
+            "epsg",
+            "error_msg"]
+            )
         global_index = 0
 
     aoi_path = working_dir / version / f'{aoi_version}.geojson'
@@ -99,7 +112,7 @@ def generate_dataset(config_path):
             print(f'AOI at index {index} already processed, continuing to next...')
             continue
         try:
-            global_index, metadata_df = process_aoi(
+            global_index, metadata_df, failure_message = process_aoi(
                 index,
                 aoi,
                 config,
@@ -110,8 +123,11 @@ def generate_dataset(config_path):
                 version,
                 metadata_filename
             )
+        except Exception as e:
+            failure_message = e
         finally:
             aoi_gdf.loc[index, 'processed'] = True
+            aoi_gdf.loc[index, 'error'] = failure_message
             aoi_gdf.to_file(aoi_path, driver='GeoJSON')
 
 def process_aoi(
@@ -138,7 +154,8 @@ def process_aoi(
 
     if len(s2_items)<4:
         print(f"Missing Sentinel-2 scenes for AOI {aoi_bounds}")
-        return global_index, metadata_df
+        failure_message = 's2_scenes_missing'
+        return global_index, metadata_df, failure_message
 
     try:
         epsg = s2_items[0].properties["proj:epsg"]
@@ -151,31 +168,35 @@ def process_aoi(
 
     for s2_item in s2_items:
         s2_datetime = s2_item.datetime
-        print(f"Searching Sentinel-1 and Landsat scenes close to {s2_datetime}")
+        print(f"searching sentinel-1 and landsat scenes close to {s2_datetime}")
         s1_item = search_s1_scenes(aoi, s2_datetime, catalog, config)
         s1_items += s1_item
         landsat_item = search_landsat_scenes(aoi, s2_datetime, catalog, config)
         landsat_items += landsat_item
     
     if len(landsat_items) < 4:
-        print(f"Missing Landsat Scenes for AOI {aoi_bounds}")
-        return global_index, metadata_df
+        print(f"missing landsat scenes for aoi {aoi_bounds}")
+        failure_message = 'landsat_scenes_missing'
+        return global_index, metadata_df, failure_message
 
     if len(s1_items) < 4:
-        print(f"Missing S1 scenes for AOI {aoi_bounds}")
-        return global_index, metadata_df
+        print(f"missing s1 scenes for aoi {aoi_bounds}")
+        failure_message = 's1_scenes_missing'
+        return global_index, metadata_df, failure_message
             
-    print("searching Land Cover data...")
+    print("searching land cover data...")
     lc_items = search_lc_scene(aoi, catalog, config)
     if not lc_items:
-        print(f"No Land Cover data found for AOI {aoi_bounds}")
-        return global_index, metadata_df
+        print(f"no land cover data found for aoi {aoi_bounds}")
+        failure_message = 'lc_scenes_missing'
+        return global_index, metadata_df, failure_message
     
-    print("searching DEM data...")
+    print("searching dem data...")
     dem_items = search_dem_scene(aoi, catalog, config)
     if not dem_items:
-        print(f"No DEM data found for AOI {aoi_bounds}")
-        return global_index, metadata_df
+        print(f"no dem data found for aoi {aoi_bounds}")
+        failure_message = 'dem_scenes_missing'
+        return global_index, metadata_df, failure_message
 
         # first, get area of overlap of all item bboxes
     itemcollections = [s2_items, s1_items, landsat_items, lc_items, dem_items]
@@ -184,39 +205,44 @@ def process_aoi(
     overlap = reduce(lambda x, y: x.intersection(y), combined_geoms)
     overlap_bounds = overlap.bounds
     
-    print("stacking Landsat data...")
+    print("stacking landsat data...")
     landsat_stack = stack_data(landsat_items, "landsat", config, epsg, overlap_bounds, bbox_is_latlon=True)
     if landsat_stack is None:
-        print(f"Failed to stack Landsat bands for AOI {aoi_bounds}")
-        return global_index, metadata_df
+        print(f"failed to stack landsat bands for aoi {aoi_bounds}")
+        failure_message = 'landsat_stack_failure'
+        return global_index, metadata_df, failure_message
     
     overlap_bbox = landsat_stack.rio.bounds()
 
-    print("stacking Sentinel-2 data...")
+    print("stacking sentinel-2 data...")
     s2_stack = stack_data(s2_items, "sentinel_2", config, epsg, overlap_bbox, bbox_is_latlon=False)
     if s2_stack is None:
-        print(f"Failed to stack Sentinel-2 bands for AOI {aoi_bounds}")
-        return global_index, metadata_df
+        print(f"failed to stack sentinel-2 bands for aoi {aoi_bounds}")
+        failure_message = 's2_stack_failure'
+        return global_index, metadata_df, failure_message
 
-    print("stacking DEM data...")
+    print("stacking dem data...")
     dem_stack = stack_dem_data(dem_items, config,  epsg, overlap_bbox)
     if dem_stack is None:
-        print(f"Failed to stack DEM data for AOI {aoi_bounds} and date range {date_range}")
-        return global_index, metadata_df
-    print("stacking Land Cover data...")
+        print(f"failed to stack dem data for aoi {aoi_bounds} and date range {date_range}")
+        failure_message = 'dem_stack_failure'
+        return global_index, metadata_df, failure_message
+    print("stacking land cover data...")
     lc_stack = stack_lc_data(lc_items, config, epsg, overlap_bbox)
     if lc_stack is None:
-        print(f"Failed to stack Land Cover data for AOI {aoi_bounds} and date range {date_range}")
-        return global_index, metadata_df
+        print(f"failed to stack land cover data for aoi {aoi_bounds} and date range {date_range}")
+        failure_message = 'lc_stack_failure'
+        return global_index, metadata_df, failure_message
 
-    print("stacking Sentinel-1 data...")
+    print("stacking sentinel-1 data...")
     s1_stack = stack_data(s1_items, "sentinel_1", config, epsg, overlap_bbox, bbox_is_latlon=False)
     if s1_stack is None:
-        print(f"Failed to stack Sentinel-1 bands for AOI {aoi_bounds}")
-        return global_index, metadata_df
+        print(f"failed to stack sentinel-1 bands for aoi {aoi_bounds}")
+        failure_message = 's1_stack_failure'
+        return global_index, metadata_df, failure_message
 
     print("processing chips...")
-    global_index, metadata_df = process_chips(s2_stack,
+    global_index, metadata_df, failure_message = process_chips(s2_stack,
                                               s1_stack,
                                               landsat_stack,
                                               lc_stack,
@@ -230,7 +256,7 @@ def process_aoi(
                                              )
     
     metadata_df.to_csv(working_dir / version / metadata_filename, index=False)
-    return global_index, metadata_df
+    return global_index, metadata_df, failure_message
         
 def process_array( 
             stack, 
@@ -270,45 +296,66 @@ def process_array(
         return None
     return array
 
+def fail_chip(global_index, aoi_index, metadata_df, lc, lc_stack, lc_sample_size, x, y, epsg, failure_message):
+    
+    metadata_df = pd.concat([pd.DataFrame([[global_index,
+                                            aoi_index,
+                                            None,
+                                            None,
+                                            None,
+                                            lc,
+                                            lc_stack.x[(x) * lc_sample_size + int(lc_sample_size / 2)].data,
+                                            lc_stack.y[(y) * lc_sample_size + int(lc_sample_size / 2)].data,
+                                            epsg,
+                                            failure_message]
+                                          ],
+                                          columns=metadata_df.columns
+                                         ),
+                             metadata_df],
+                            ignore_index=True
+                           )
+    global_index += 1
+    return global_index, metadata_df
+    
 def process_chips(s2_stack, s1_stack, landsat_stack, lc_stack, dem_stack, epsg, config, global_index, aoi_index, metadata_df, root_path):
 
     print("Loading lc_stack")
 
     try:
         lc_stack = lc_stack.compute()
-    except:
+    except Exception as failure_message:
         print("skipping the AOI for no LC data")
-        return global_index, metadata_df
+        return global_index, metadata_df, failure_message
 
     print("Loading s2_stack")
     
     try:
         s2_stack = s2_stack.compute()
-    except:
+    except Exception as failure_message:
         print("skipping the AOI for no S2 data")
-        return global_index, metadata_df
+        return global_index, metadata_df, failure_message
 
     print("Loading s1_stack")
     
     try:
         s1_stack = s1_stack.compute()
-    except:
+    except Exception as failure_message:
         print("skipping the AOI for no S1 data")
-        return global_index, metadata_df
+        return global_index, metadata_df, failure_message
 
     print("Loading dem_stack")
     
     try:
         dem_stack = dem_stack.compute()
-    except:
+    except Exception as failure_message:
         print("skipping the AOI for no dem data")
-        return global_index, metadata_df
+        return global_index, metadata_df, failure_message
 
     try:
         landsat_stack = landsat_stack.compute()
-    except:
+    except Exception as failure_message:
         print("skipping the AOI for no landsat data")
-        return global_index, metadata_df
+        return global_index, metadata_df, failure_message
 
     lc_sample_size = int(config['chips']['sample_size'] / config['land_cover']['resolution'])
     
@@ -324,16 +371,46 @@ def process_chips(s2_stack, s1_stack, landsat_stack, lc_stack, dem_stack, epsg, 
     ys, xs = np.where(lc_uniqueness)
 
     # Following indices are added to limit the number of rangeland, bareground, and water chips per tile
-    rangeland_index = 0
-    bareground_index = 0
-    water_index = 0
-    tree_index = 0
-    crops_index = 0
+    lc_indices = {1: 0, 2: 0, 5: 0, 8: 0, 11: 0}
     for index in range(0, len(ys)):
         x = xs[index]
         y = ys[index]
         
+ 
+        lc_array = process_array(
+            stack = lc_stack, 
+            epsg = epsg, 
+            coords = (x, y),
+            array_name = 'land_cover',
+            config = config,
+            fill_na = False,
+            na_value = None,
+            dtype = np.int8,
+        )
         
+        if lc_array is None:
+            print("Missing values in land cover array")
+            failure_message = "lc_values_missing"
+            global_index, metadata_df = fail_chip(global_index, aoi_index, metadata_df, None, lc_stack, lc_sample_size, x, y, epsg, failure_message)
+            continue
+
+        if (~np.isin(lc_array, [1, 2, 4, 5, 8, 11])).any():
+            failure_message = "lc_values_wrong"
+            global_index, metadata_df = fail_chip(global_index, aoi_index, metadata_df, None, lc_stack, lc_sample_size, x, y, epsg, failure_message)
+            continue
+
+        # Skipping Flooded Vegetation
+        if (np.isin(lc_array, [4])).any():
+            failure_message = "lc_values_flooded_vegetation"
+            global_index, metadata_df = fail_chip(global_index, aoi_index, metadata_df, None, lc_stack, lc_sample_size, x, y, epsg, failure_message)
+            continue
+
+        lc = np.unique(lc_array)[0]
+        if lc_indices[lc] > 400:
+            failure_message = f"lc_{lc}_limit"
+            global_index, metadata_df = fail_chip(global_index, aoi_index, metadata_df, lc, lc_stack, lc_sample_size, x, y, epsg, failure_message)
+            continue
+
         s2_array = process_array(
             stack = s2_stack, 
             epsg = epsg, 
@@ -346,11 +423,15 @@ def process_chips(s2_stack, s1_stack, landsat_stack, lc_stack, dem_stack, epsg, 
         )      
         if s2_array is None:
             print("Missing values in S2 array")
-            continue    
+            failure_message = "s2_values_missing"
+            global_index, metadata_df = fail_chip(global_index, aoi_index, metadata_df, lc, lc_stack, lc_sample_size, x, y, epsg, failure_message)
+            continue 
 
         if len(s2_array.time.values) < 4:
             print("Missing scenes in S2 array")
-            continue
+            failure_message = "s2_scenes_missing"
+            global_index, metadata_df = fail_chip(global_index, aoi_index, metadata_df, lc, lc_stack, lc_sample_size, x, y, epsg, failure_message)
+            continue 
   
 
         s1_array = process_array(
@@ -366,11 +447,15 @@ def process_chips(s2_stack, s1_stack, landsat_stack, lc_stack, dem_stack, epsg, 
 
         if s1_array is None:
             print("Missing values in S1 array")
+            failure_message = "s1_values_missing"
+            global_index, metadata_df = fail_chip(global_index, aoi_index, metadata_df, lc, lc_stack, lc_sample_size, x, y, epsg, failure_message)
             continue 
 
-        if len(s2_array.time.values) < 4:
+        if len(s1_array.time.values) < 4:
             print("Missing scenes in S1 array")
-            continue
+            failure_message = "s1_scenes_missing"
+            global_index, metadata_df = fail_chip(global_index, aoi_index, metadata_df, lc, lc_stack, lc_sample_size, x, y, epsg, failure_message)
+            continue 
 
         landsat_array = process_array(
             stack = landsat_stack, 
@@ -385,27 +470,16 @@ def process_chips(s2_stack, s1_stack, landsat_stack, lc_stack, dem_stack, epsg, 
 
         if landsat_array is None:
             print("Missing values in landsat array")
+            failure_message = "landsat_values_missing"
+            global_index, metadata_df = fail_chip(global_index, aoi_index, metadata_df, lc, lc_stack, lc_sample_size, x, y, epsg, failure_message)
             continue 
 
         if len(s2_array.time.values) < 4:
             print("Missing scenes in landsat array")
-            continue
-
-        lc_array = process_array(
-            stack = lc_stack, 
-            epsg = epsg, 
-            coords = (x, y),
-            array_name = 'land_cover',
-            config = config,
-            fill_na = False,
-            na_value = None,
-            dtype = np.int8,
-        )
-        
-        if lc_array is None:
-            print("Missing values in land cover array")
-            continue
-            
+            failure_message = "landsat_scenes_missing"
+            global_index, metadata_df = fail_chip(global_index, aoi_index, metadata_df, lc, lc_stack, lc_sample_size, x, y, epsg, failure_message)
+            continue 
+         
         dem_array = process_array(
             stack = dem_stack, 
             epsg = epsg, 
@@ -419,36 +493,10 @@ def process_chips(s2_stack, s1_stack, landsat_stack, lc_stack, dem_stack, epsg, 
 
         if dem_array is None:
             print("Missing values in dem array")
-            continue
-            
-        if (np.isin(lc_array, [255, 130, 133])).any():
-            raise ValueError('Wrong LC value')
-        # Skipping Flooded Vegetation
-        if (np.isin(lc_array, [4])).any():
-            print("Skipping flooded vegetation")
-            continue
-        
-        lc = np.unique(lc_array)[0]
-        if lc == 1:
-            water_index += 1
-            if water_index > 400:
-                continue 
-        elif lc == 8:
-            bareground_index += 1
-            if bareground_index > 400:
-                continue
-        elif lc == 11:
-            rangeland_index += 1
-            if rangeland_index > 400:
-                continue
-        elif lc == 2:
-            tree_index += 1
-            if tree_index > 400:
-                continue
-        elif lc == 5:
-            crops_index += 1
-            if crops_index > 400:
-                continue
+            failure_message = "dem_values_missing"
+            global_index, metadata_df = fail_chip(global_index, aoi_index, metadata_df, lc, lc_stack, lc_sample_size, x, y, epsg, failure_message)
+            continue 
+
         print(f"Generating Chips for chip {global_index}...")
         gen_status, s2_dts, s1_dts, landsat_dts = gen_chips(s2_array, s1_array, landsat_array, lc_array, dem_array, global_index, root_path)
         if gen_status:
@@ -460,7 +508,8 @@ def process_chips(s2_stack, s1_stack, landsat_stack, lc_stack, dem_stack, epsg, 
                                                     lc,
                                                     lc_stack.x[(x) * lc_sample_size + int(lc_sample_size / 2)].data,
                                                     lc_stack.y[(y) * lc_sample_size + int(lc_sample_size / 2)].data,
-                                                    epsg]
+                                                    epsg,
+                                                    None]
                                                   ],
                                                   columns=metadata_df.columns
                                                  ),
@@ -469,7 +518,7 @@ def process_chips(s2_stack, s1_stack, landsat_stack, lc_stack, dem_stack, epsg, 
                                    )
             global_index += 1
     
-    return global_index, metadata_df
+    return global_index, metadata_df, None
 
 def main():
     generate_dataset('/home/benchuser/code/config.yml')
