@@ -2,6 +2,7 @@ import stackstac
 import numpy as np
 import xarray as xr
 import geopandas as gpd
+from shapely import box
 
 def pystac_itemcollection_to_gdf(item_collection):
     geometries = []
@@ -57,12 +58,16 @@ def stack_data(
         fill_value=np.nan,
         **bounds_kwargs
     )
+    if platform in ['sentinel_2', 'landsat']:
+        full_stack = mask_cloudy_pixels(full_stack, platform)
+
+    item_stack = full_stack.groupby("time.quarter").median("time", skipna=True)
+ 
     if len(item_stack.band) != len(bands):
         raise ValueError(f"{platform} unexpected number of bands")
     if len(item_stack.time) != 4:
         raise ValueError(f"{platform} unexpected number of time steps")
     if platform in ['sentinel_2', 'landsat']:
-        item_stack = mask_cloudy_pixels(item_stack, platform)
         item_stack = item_stack.drop_sel(band=cloud_band)
         item_stack = item_stack.chunk(chunks={"band": len(bands) - 1, "x": -1, "y": "auto"})
     else: 
