@@ -1,0 +1,92 @@
+import pystac_client
+from urllib3 import Retry
+from pystac_client.stac_api_io import StacApiIO
+import planetary_computer
+import pandas as pd
+import geopandas as gpd
+from dask.distributed import Client, LocalCluster
+import logging
+from pathlib import Path
+import shutil
+
+from src.gelos_config import GELOSConfig
+from src.aoi_processor import AOI_Processor
+
+class Downloader:
+    """This class handles data selection and download for GELOS."""
+    def __init__(self, config: GELOSConfig):
+        self.config = config    
+        self.working_directory = Path(self.config.directory.working_dir / self.config.dataset.version)
+
+        # create working directory with version number if none exists
+        (self.working_directory).mkdir(exist_ok=True)
+
+        # copy yaml to working directory
+        shutil.copy(self.config_path, self.working_directory / "config.yaml")
+
+        # start dask cluster
+        self.cluster = LocalCluster(silence_logs=logging.ERROR)
+        self.client = Client(self.cluster)
+
+        # set retry policy for pystac catalog client
+        retry = Retry(
+            total=10, backoff_factor=1, status_forcelist=[502, 503, 504], allowed_methods=None
+        )
+        
+        # initialize pystac client with retry policy
+        stac_api_io = StacApiIO(max_retries=retry)
+        self.catalog = pystac_client.Client.open(
+            "https://planetarycomputer.microsoft.com/api/stac/v1",
+            modifier=planetary_computer.sign_inplace,
+            stac_io=stac_api_io
+        )
+        
+        # handle the case where the script is continuing an existing download operation
+        if (self.working_directory / 'aoi_metadata.geojson').exists():
+            aoi_path = (self.working_directory / 'aoi_metadata.geojson')
+            self.aoi_gdf = gpd.read_file(aoi_path)
+            self.chip_metadata_df = pd.read_csv(self.working_directory / 'chip_metadata.csv')
+            # drop aoi which already have chips generated
+            self.aoi_gdf = self.aoi_gdf[self.aoi_gdf.index > self.chip_metadata_df['aoi_index'].max()]
+            self.chip_index = self.metadata_df['chip_id'].max() + 1
+
+        # handle the case where the script is starting a new download operation
+        else:
+            aoi_path = (f'/home/benchuser/code/data/map_{self.config.aoi.version}.geojson')
+            self.aoi_gdf = gpd.read_file(aoi_path)
+            self.aoi_gdf['processed'] = False
+            self.aoi_gdf['error'] = None
+            self.aoi_gdf = self.aoi_gdf.drop(config['excluded_aoi_indices'])
+            self.aoi_gdf.to_file(self.working_directory / 'aoi_metadata.geojson', driver = 'GeoJSON')
+            self.chip_metadata_df = pd.DataFrame(columns=[
+                "chip_id", 
+                "aoi_index", 
+                "s2_dates", 
+                "s1_dates", 
+                "landsat_dates", 
+                "lc", 
+                "x_center", 
+                "y_center", 
+                "epsg",
+                "error_msg"]
+                )
+            self.chip_index = 0
+            aoi_path = (self.working_directory / 'aoi_metadata.geojson')
+    
+    def download(self):
+        """Download data for all AOIs that have not yet been processed from the AOI GeoJSON file"""
+        for aoi_index, aoi in self.aoi_gdf.iterrows():
+
+            aoi_processor = AOI_Processor(
+                aoi_index,
+                aoi,
+                self,
+            )
+            try:
+                aoi_processor.process_aoi()
+                aoi_status = 'success'
+            except Exception as e:
+                aoi_status = e
+            finally:
+                self.aoi_gdf.loc[aoi_index, 'error'] = aoi_status
+                self.aoi_gdf.to_file(self.aoi_path, driver='GeoJSON')

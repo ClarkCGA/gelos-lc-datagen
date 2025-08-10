@@ -173,7 +173,7 @@ def process_aoi(
         s1_items += s1_item
         landsat_item = search_landsat_scenes(aoi, s2_datetime, catalog, config)
         landsat_items += landsat_item
-    
+
     if len(landsat_items) < 4:
         print(f"missing landsat scenes for aoi {aoi_bounds}")
         failure_message = 'landsat_scenes_missing'
@@ -256,6 +256,7 @@ def process_aoi(
                                              )
     
     metadata_df.to_csv(working_dir / version / metadata_filename, index=False)
+    failure_message = 'success'
     return global_index, metadata_df, failure_message
         
 def process_array( 
@@ -371,7 +372,7 @@ def process_chips(s2_stack, s1_stack, landsat_stack, lc_stack, dem_stack, epsg, 
     ys, xs = np.where(lc_uniqueness)
 
     # Following indices are added to limit the number of rangeland, bareground, and water chips per tile
-    lc_indices = {1: 0, 2: 0, 5: 0, 8: 0, 11: 0}
+    lc_indices = {1: 0, 2: 0, 5: 0, 7: 0, 8: 0, 11: 0}
     for index in range(0, len(ys)):
         x = xs[index]
         y = ys[index]
@@ -394,7 +395,7 @@ def process_chips(s2_stack, s1_stack, landsat_stack, lc_stack, dem_stack, epsg, 
             global_index, metadata_df = fail_chip(global_index, aoi_index, metadata_df, None, lc_stack, lc_sample_size, x, y, epsg, failure_message)
             continue
 
-        if (~np.isin(lc_array, [1, 2, 4, 5, 8, 11])).any():
+        if (~np.isin(lc_array, [1, 2, 4, 5, 7, 8, 11])).any():
             failure_message = "lc_values_wrong"
             global_index, metadata_df = fail_chip(global_index, aoi_index, metadata_df, None, lc_stack, lc_sample_size, x, y, epsg, failure_message)
             continue
@@ -405,7 +406,8 @@ def process_chips(s2_stack, s1_stack, landsat_stack, lc_stack, dem_stack, epsg, 
             global_index, metadata_df = fail_chip(global_index, aoi_index, metadata_df, None, lc_stack, lc_sample_size, x, y, epsg, failure_message)
             continue
 
-        lc = np.unique(lc_array)[0]
+        lc = int(np.unique(lc_array)[0])
+        
         if lc_indices[lc] > 400:
             failure_message = f"lc_{lc}_limit"
             global_index, metadata_df = fail_chip(global_index, aoi_index, metadata_df, lc, lc_stack, lc_sample_size, x, y, epsg, failure_message)
@@ -509,7 +511,7 @@ def process_chips(s2_stack, s1_stack, landsat_stack, lc_stack, dem_stack, epsg, 
                                                     lc_stack.x[(x) * lc_sample_size + int(lc_sample_size / 2)].data,
                                                     lc_stack.y[(y) * lc_sample_size + int(lc_sample_size / 2)].data,
                                                     epsg,
-                                                    None]
+                                                    'success']
                                                   ],
                                                   columns=metadata_df.columns
                                                  ),
