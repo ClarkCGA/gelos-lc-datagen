@@ -1,6 +1,8 @@
 from dataclasses import dataclass, field
-from typing import List, Optional
+from typing import List, Optional, Union
 import yaml
+import numpy as np
+
 
 @dataclass
 class PlatformConfig:
@@ -9,6 +11,15 @@ class PlatformConfig:
     resolution: int
     native_crs: bool
     bands: List[str] = field(default_factory=list)
+    fill_na: bool
+    na_value: Union[int, float]    
+    dtype: np.dtype
+
+    def __post_init__(self):
+        """Converts dtype string from YAML to a numpy.dtype object."""
+        if isinstance(self.dtype, str):
+            self.dtype = np.dtype(self.dtype)
+
 
 @dataclass
 class Sentinel2Config(PlatformConfig):

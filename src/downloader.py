@@ -43,9 +43,10 @@ class Downloader:
         
         # handle the case where the script is continuing an existing download operation
         if (self.working_directory / 'aoi_metadata.geojson').exists():
-            aoi_path = (self.working_directory / 'aoi_metadata.geojson')
-            self.aoi_gdf = gpd.read_file(aoi_path)
-            self.chip_metadata_df = pd.read_csv(self.working_directory / 'chip_metadata.csv')
+            self.aoi_path = (self.working_directory / 'aoi_metadata.geojson')
+            self.aoi_gdf = gpd.read_file(self.aoi_path)
+            self.chip_metadata_path = self.working_directory / 'chip_metadata.csv'
+            self.chip_metadata_df = pd.read_csv(self.chip_metadata_path)
             # drop aoi which already have chips generated
             self.aoi_gdf = self.aoi_gdf[self.aoi_gdf.index > self.chip_metadata_df['aoi_index'].max()]
             self.chip_index = self.metadata_df['chip_id'].max() + 1
@@ -59,19 +60,19 @@ class Downloader:
             self.aoi_gdf = self.aoi_gdf.drop(config['excluded_aoi_indices'])
             self.aoi_gdf.to_file(self.working_directory / 'aoi_metadata.geojson', driver = 'GeoJSON')
             self.chip_metadata_df = pd.DataFrame(columns=[
-                "chip_id", 
-                "aoi_index", 
-                "s2_dates", 
-                "s1_dates", 
-                "landsat_dates", 
-                "lc", 
-                "x_center", 
-                "y_center", 
-                "epsg",
-                "error_msg"]
-                )
+                        'chip_index',
+                        'aoi_index',
+                        'sentinel_2_dates',
+                        'sentinel_1_dates',
+                        'landsat_dates',
+                        'land_cover',
+                        'chip_footprint',
+                        'epsg',
+                        'status',
+                ])
             self.chip_index = 0
-            aoi_path = (self.working_directory / 'aoi_metadata.geojson')
+            self.aoi_path = self.working_directory / 'aoi_metadata.geojson'
+            self.chip_metadata_path = self.working_directory / 'chip_metadata.csv'
     
     def download(self):
         """Download data for all AOIs that have not yet been processed from the AOI GeoJSON file"""
@@ -80,13 +81,18 @@ class Downloader:
             aoi_processor = AOI_Processor(
                 aoi_index,
                 aoi,
-                self,
+                self.chip_index,
+                self.working_directory,
+                self.config,
             )
             try:
-                aoi_processor.process_aoi()
+                aoi_chip_df = aoi_processor.process_aoi()
+                self.chip_metadata_df = pd.concat([self.chip_metadata_df, aoi_chip_df], ignore_index=True)
+                self.chip_index += len(aoi_chip_df)
                 aoi_status = 'success'
             except Exception as e:
                 aoi_status = e
             finally:
                 self.aoi_gdf.loc[aoi_index, 'error'] = aoi_status
                 self.aoi_gdf.to_file(self.aoi_path, driver='GeoJSON')
+                self.chip_metadata_df.to_csv(self.chip_metadata_path, index=False)
