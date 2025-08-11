@@ -32,7 +32,7 @@ def search_s1_scenes(aoi, center_datetime, overall_date_range, delta_days, catal
         datetime = datetime_range,
         max_items = 50,
     )
-    all_items = search.get_all_items()
+    all_items = search.item_collection()
     if not all_items:
         return pystac.ItemCollection([])
 
@@ -103,6 +103,8 @@ def get_clipped_datetime_range(center_datetime, overall_date_range, delta_days):
 
     # Clip the search window to the overall date_range
     range_start_str, range_end_str = overall_date_range.split('/')
+    range_start_str += 'T00:00:00Z'
+    range_end_str += 'T23:59:59Z'
     range_start = datetime.fromisoformat(range_start_str.replace('Z', '+00:00'))
     range_end = datetime.fromisoformat(range_end_str.replace('Z', '+00:00'))
 

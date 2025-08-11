@@ -16,13 +16,7 @@ class Downloader:
     """This class handles data selection and download for GELOS."""
     def __init__(self, config: GELOSConfig):
         self.config = config    
-        self.working_directory = Path(self.config.directory.working_dir / self.config.dataset.version)
-
-        # create working directory with version number if none exists
-        (self.working_directory).mkdir(exist_ok=True)
-
-        # copy yaml to working directory
-        shutil.copy(self.config_path, self.working_directory / "config.yaml")
+        self.working_directory = Path(self.config.directory.working) / self.config.dataset.version
 
         # start dask cluster
         self.cluster = LocalCluster(silence_logs=logging.ERROR)
@@ -42,7 +36,7 @@ class Downloader:
         )
         
         # handle the case where the script is continuing an existing download operation
-        if (self.working_directory / 'aoi_metadata.geojson').exists():
+        if (self.working_directory / 'chip_metadata.csv').exists():
             self.aoi_path = (self.working_directory / 'aoi_metadata.geojson')
             self.aoi_gdf = gpd.read_file(self.aoi_path)
             self.chip_metadata_path = self.working_directory / 'chip_metadata.csv'
@@ -55,9 +49,7 @@ class Downloader:
         else:
             aoi_path = (f'/home/benchuser/code/data/map_{self.config.aoi.version}.geojson')
             self.aoi_gdf = gpd.read_file(aoi_path)
-            self.aoi_gdf['processed'] = False
-            self.aoi_gdf['error'] = None
-            self.aoi_gdf = self.aoi_gdf.drop(config['excluded_aoi_indices'])
+            self.aoi_gdf['status'] = 'not processed'
             self.aoi_gdf.to_file(self.working_directory / 'aoi_metadata.geojson', driver = 'GeoJSON')
             self.chip_metadata_df = pd.DataFrame(columns=[
                         'chip_index',
@@ -93,6 +85,6 @@ class Downloader:
             except Exception as e:
                 aoi_status = e
             finally:
-                self.aoi_gdf.loc[aoi_index, 'error'] = aoi_status
+                self.aoi_gdf.loc[aoi_index, 'status'] = aoi_status
                 self.aoi_gdf.to_file(self.aoi_path, driver='GeoJSON')
                 self.chip_metadata_df.to_csv(self.chip_metadata_path, index=False)

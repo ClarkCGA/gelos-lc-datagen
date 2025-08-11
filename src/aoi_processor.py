@@ -1,3 +1,4 @@
+import xarray as xr
 from src.gelos_config import GELOSConfig
 from src.chip_generator import ChipGenerator
 import pystac
@@ -8,12 +9,12 @@ from functools import reduce
 
 class AOI_Processor:
     """Responsible for processing one AOI, managed by Downloader"""
-    def __init__(self, aoi_index, aoi, chip_index, working_directory, config: GELOSConfig):
+    def __init__(self, aoi_index, aoi, chip_index, working_directory, catalog, config: GELOSConfig):
         self.config = config
+        self.catalog = catalog
         self.aoi_index = aoi_index
         self.aoi = aoi
         self.chip_index = chip_index
-        self.aoi_bounds = aoi['geometry'].bounds
         self.working_directory = working_directory
         self.stacks = {}
 
@@ -27,7 +28,7 @@ class AOI_Processor:
         for date_range in self.config.sentinel_2.time_ranges:
             print(f"Searching Sentinel-2 scenes for {date_range}")
             s2_items_season = search_s2_scenes(
-                self.aoi,
+                self.aoi.geometry,
                 date_range,
                 self.catalog,
                 self.config.sentinel_2.collection,
@@ -52,7 +53,7 @@ class AOI_Processor:
             center_datetime = s2_item.datetime
             print(f"searching sentinel_1 and landsat scenes close to {center_datetime} within {date_range}")
             s1_item = search_s1_scenes(
-                self.aoi,
+                self.aoi.geometry,
                 center_datetime,
                 date_range,
                 self.config.sentinel_1.delta_days,
@@ -61,7 +62,7 @@ class AOI_Processor:
             )
             s1_items += s1_item
             landsat_item = search_landsat_scenes(
-                self.aoi,
+                self.aoi.geometry,
                 center_datetime,
                 date_range,
                 self.config.landsat.delta_days,
@@ -80,7 +81,7 @@ class AOI_Processor:
                 
         print("searching land cover data...")
         land_cover_items = search_annual_scene(
-            self.aoi,
+            self.aoi.geometry,
             self.config.land_cover.year,
             self.catalog,
             self.config.land_cover.collection,
@@ -90,7 +91,7 @@ class AOI_Processor:
 
         print("searching dem data...")
         dem_items = search_annual_scene(
-            self.aoi,
+            self.aoi.geometry,
             self.config.dem.year,
             self.catalog,
             self.config.dem.collection,
@@ -118,7 +119,7 @@ class AOI_Processor:
             bbox_is_latlon = True
         )
 
-        overlap_bbox = self.landsat_stack.rio.bounds()
+        overlap_bbox = self.stacks['landsat'].rio.bounds()
 
         print("stacking sentinel_2 data...")
         self.stacks['sentinel_2'] = stack_data(
