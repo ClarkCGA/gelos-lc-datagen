@@ -2,6 +2,8 @@ services:
   notebook:
     image: gfm-bench:latest
     build: .
+    environment:
+      - PYTHONPATH=/home/benchuser/code
     ports:
       - "8088:8888"
       - "8087:8787"

@@ -50,7 +50,7 @@ def stack_data(
         bbox = adjust_bbox_to_resolution(bbox, resolution)
     bounds_kwargs = {bounds_param: bbox}
 
-    item_stack = stackstac.stack(
+    stack = stackstac.stack(
         items,
         assets=bands,
         epsg=epsg,
@@ -59,14 +59,12 @@ def stack_data(
         **bounds_kwargs
     )
     if platform in ['sentinel_2', 'landsat']:
-        full_stack = mask_cloudy_pixels(full_stack, platform)
+        stack = mask_cloudy_pixels(stack, platform)
 
-    item_stack = full_stack.groupby("time.quarter").median("time", skipna=True)
+    item_stack = stack.groupby("time.quarter").median("time", skipna=True)
  
     if len(item_stack.band) != len(bands):
         raise ValueError(f"{platform} unexpected number of bands")
-    if len(item_stack.time) != 4:
-        raise ValueError(f"{platform} unexpected number of time steps")
     if platform in ['sentinel_2', 'landsat']:
         item_stack = item_stack.drop_sel(band=cloud_band)
         item_stack = item_stack.chunk(chunks={"band": len(bands) - 1, "x": -1, "y": "auto"})
@@ -98,7 +96,7 @@ def stack_dem_data(items, native_crs, resolution, epsg=None, bbox=None, bbox_is_
     
     return item_stack
 
-def stack_lc_data(items, native_crs, resolution, epsg, bbox, bbox_is_latlon=False):
+def stack_land_cover_data(items, native_crs, resolution, epsg, bbox, bbox_is_latlon=False):
     if not items:
         print("No Land Cover data found.")
         return None

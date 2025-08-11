@@ -1,11 +1,13 @@
-from src.aoi_processor import AOI_Processor
+from typing import TYPE_CHECKING
+if TYPE_CHECKING:
+    from src.aoi_processor import AOI_Processor
 from src.utils.output import save_multitemporal_chips, save_thumbnails
 from src.utils.array import unique_class, process_array
 import numpy as np
 import pandas as pd
 
 class ChipGenerator:
-    def __init__(self, processor: AOI_Processor):
+    def __init__(self, processor: "AOI_Processor"):
         self.processor = processor
         self.chip_entries = {}
         

@@ -1,13 +1,13 @@
 # Configuration file for chip generation
 dataset:
-  version: "v0.40.2"
+  version: "v0.40.2test"
 
 aoi:
   version: "v0.30"
 
 directory:
-  working: "/path/to/work"
-  output: "/path/to/output"
+  working: "/home/benchuser/data"
+  output: "/home/benchuser/final_data"
 
 log_errors: true
 
@@ -50,7 +50,11 @@ sentinel_1:
   nodata_pixel_percentage : 5 # Maximum missing data percentage in scene
   bands: ["vv", "vh"]  # VV, VH
   resolution: 10  # Spatial resolution in meters
-  native_crs: False # False gets crs of S2, True gets crs of first Landsat scene              
+  native_crs: false # False gets crs of S2, True gets crs of first Landsat scene              
+  fill_na: false
+  na_value: -999 
+  dtype: "float32"
+
 # Landsat-8 (L8) settings
 landsat:
   delta_days: 91 # get the full season for landsat

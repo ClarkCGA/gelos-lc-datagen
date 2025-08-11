@@ -10,11 +10,9 @@ class PlatformConfig:
     collection: str
     resolution: int
     native_crs: bool
-    bands: List[str] = field(default_factory=list)
     fill_na: bool
     na_value: Union[int, float]    
     dtype: np.dtype
-
     def __post_init__(self):
         """Converts dtype string from YAML to a numpy.dtype object."""
         if isinstance(self.dtype, str):
@@ -27,11 +25,13 @@ class Sentinel2Config(PlatformConfig):
     nodata_pixel_percentage: int
     cloud_cover: int
     cloud_band: str
+    bands: List[str]
 
 @dataclass
 class Sentinel1Config(PlatformConfig):
     nodata_pixel_percentage: int
     delta_days: int
+    bands: List[str]
 
 @dataclass
 class LandsatConfig(PlatformConfig):
@@ -39,6 +39,7 @@ class LandsatConfig(PlatformConfig):
     cloud_cover: int
     cloud_band: str
     delta_days: int
+    bands: List[str]
 
 @dataclass
 class DemConfig(PlatformConfig):
@@ -63,13 +64,9 @@ class AoiConfig:
     version: str
 
 @dataclass
-class MetadataConfig:
-    file: str
-
-@dataclass
 class DirectoryConfig:
-    working_dir: str
-    output_dir: str
+    working: str
+    output: str
 
 @dataclass
 class GELOSConfig:
@@ -77,7 +74,6 @@ class GELOSConfig:
     dataset: DatasetConfig
     aoi: AoiConfig
     directory: DirectoryConfig
-    metadata: MetadataConfig
     log_errors: bool
     sentinel_2: Sentinel2Config
     sentinel_1: Sentinel1Config
@@ -96,7 +92,6 @@ class GELOSConfig:
             dataset=DatasetConfig(**config_dict['dataset']),
             aoi=AoiConfig(**config_dict['aoi']),
             directory=DirectoryConfig(**config_dict['directory']),
-            metadata=MetadataConfig(**config_dict['metadata']),
             log_errors=config_dict['log_errors'],
             sentinel_2=Sentinel2Config(**config_dict['sentinel_2']),
             sentinel_1=Sentinel1Config(**config_dict['sentinel_1']),
