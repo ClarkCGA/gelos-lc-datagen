@@ -1,9 +1,11 @@
 # Configuration file for chip generation
 dataset:
-  version: "v0.40.2test"
+  version: "v0.40.4"
 
 aoi:
   version: "v0.30"
+  include_indices:
+  exclude_indices:
 
 directory:
   working: "/home/benchuser/data"
@@ -60,7 +62,7 @@ landsat:
   delta_days: 91 # get the full season for landsat
   collection: "landsat-c2-l2"
   platforms: ["landsat-8", "landsat-9"]
-  cloud_cover: 50  # Maximum allowed cloud cover percentage in scene
+  cloud_cover: 100  # Maximum allowed cloud cover percentage in scene
   # landsat does not have a nodata pixel percentage property
   bands:
   - "coastal"    # Coastal/Aerosol (Band 1)

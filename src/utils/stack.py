@@ -2,22 +2,18 @@ import stackstac
 import numpy as np
 import xarray as xr
 import geopandas as gpd
-from shapely import box
+from shapely.geometry import shape
 
 def pystac_itemcollection_to_gdf(item_collection):
     geometries = []
     properties = []
     for item in item_collection:
         # Create box geometry from bbox
-        bbox = item.bbox
-        geom = box(bbox[0], bbox[1], bbox[2], bbox[3])
-        geometries.append(geom)
-        
-        # Collect properties
-        props = {
-            'collection': item.collection_id,
-        }
+        geometries.append(shape(item.geometry))
+        props = item.properties.copy()
+        props['collection'] = item.collection_id
         properties.append(props)
+    
     
     # Create GeoDataFrame
     gdf = gpd.GeoDataFrame(properties, geometry=geometries, crs='EPSG:4326')
@@ -61,17 +57,22 @@ def stack_data(
     if platform in ['sentinel_2', 'landsat']:
         stack = mask_cloudy_pixels(stack, platform)
 
-    item_stack = stack.groupby("time.quarter").median("time", skipna=True)
+    if platform not in ['sentinel_2']:
+        quarter_times = stack.time.groupby("time.quarter").first()
+        stack = stack.groupby("time.quarter").median("time", skipna=True)
+        stack['quarter'] = quarter_times.values
+        stack = stack.rename({'quarter': 'time'})
  
-    if len(item_stack.band) != len(bands):
+ 
+    if len(stack.band) != len(bands):
         raise ValueError(f"{platform} unexpected number of bands")
     if platform in ['sentinel_2', 'landsat']:
-        item_stack = item_stack.drop_sel(band=cloud_band)
-        item_stack = item_stack.chunk(chunks={"band": len(bands) - 1, "x": -1, "y": "auto"})
+        stack = stack.drop_sel(band=cloud_band)
+        stack = stack.chunk(chunks={"band": len(bands) - 1, "x": -1, "y": "auto"})
     else: 
-        item_stack = item_stack.chunk(chunks={"band": len(bands), "x": -1, "y": "auto"})
+        stack = stack.chunk(chunks={"band": len(bands), "x": -1, "y": "auto"})
     
-    return item_stack
+    return stack
 
 def stack_dem_data(items, native_crs, resolution, epsg=None, bbox=None, bbox_is_latlon=False):
     if not items:
@@ -86,15 +87,15 @@ def stack_dem_data(items, native_crs, resolution, epsg=None, bbox=None, bbox_is_
     if not bbox_is_latlon:
         bbox = adjust_bbox_to_resolution(bbox, resolution)
     bounds_kwargs = {bounds_param: bbox}
-    item_stack = stackstac.stack(
+    stack = stackstac.stack(
         items,
         epsg=epsg,
         resolution=resolution,
         **bounds_kwargs
     ).median("time", skipna=True).squeeze()
-    item_stack = item_stack.chunk(chunks={"x": -1, "y": "auto"})
+    stack = stack.chunk(chunks={"x": -1, "y": "auto"})
     
-    return item_stack
+    return stack
 
 def stack_land_cover_data(items, native_crs, resolution, epsg, bbox, bbox_is_latlon=False):
     if not items:
@@ -109,14 +110,14 @@ def stack_land_cover_data(items, native_crs, resolution, epsg, bbox, bbox_is_lat
     if not bbox_is_latlon:
         bbox = adjust_bbox_to_resolution(bbox, resolution)
     bounds_kwargs = {bounds_param: bbox}
-    item_stack = stackstac.stack(
+    stack = stackstac.stack(
         items,
         epsg=epsg,
         resolution=resolution,
         **bounds_kwargs
     ).median("time", skipna=True).squeeze()
-    item_stack = item_stack.chunk(chunks={"x": -1, "y": "auto"})
-    return item_stack
+    stack = stack.chunk(chunks={"x": -1, "y": "auto"})
+    return stack
 
 def adjust_bbox_to_resolution(bbox, resolution):
     '''Adjusts bbox from rioxarray.rio output so stackstac snaps to grid correctly'''
@@ -126,9 +127,9 @@ def adjust_bbox_to_resolution(bbox, resolution):
     bbox_adjusted = (minx + r, miny, maxx, maxy - r)
     return bbox_adjusted
    
-def mask_cloudy_pixels(item_stack, platform):
+def mask_cloudy_pixels(stack, platform):
     if platform == "landsat":
-        qa = item_stack.sel(band="qa_pixel").astype("uint16")
+        qa = stack.sel(band="qa_pixel").astype("uint16")
         
         # Define bitmask for cloud-related flags
         mask_bitfields = [1, 2, 3, 4]
@@ -136,15 +137,15 @@ def mask_cloudy_pixels(item_stack, platform):
         clear_mask = (qa & bitmask) == 0
         
         # Broadcast the clear_mask to match stack shape
-        clear_mask = clear_mask.broadcast_like(item_stack)
+        clear_mask = clear_mask.broadcast_like(stack)
         
         # Apply the mask
-        stack = item_stack.where(clear_mask)
+        stack = stack.where(clear_mask)
     elif platform == "sentinel_2":
-        scl = item_stack.sel(band="SCL")
+        scl = stack.sel(band="SCL")
         cloud_mask = scl.isin([3, 8, 9, 10])
-        item_stack = item_stack.where(~cloud_mask)
+        stack = stack.where(~cloud_mask)
     else:
         print(f"attempting to cloud mask invalid platform: {platform}")
         return None
-    return item_stack
+    return stack

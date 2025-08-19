@@ -43,12 +43,16 @@ class Downloader:
             self.chip_metadata_df = pd.read_csv(self.chip_metadata_path)
             # drop aoi which already have chips generated
             self.aoi_gdf = self.aoi_gdf[self.aoi_gdf.index > self.chip_metadata_df['aoi_index'].max()]
-            self.chip_index = self.metadata_df['chip_id'].max() + 1
+            self.chip_index = self.chip_metadata_df['chip_index'].max() + 1
 
         # handle the case where the script is starting a new download operation
         else:
             aoi_path = (f'/home/benchuser/code/data/map_{self.config.aoi.version}.geojson')
             self.aoi_gdf = gpd.read_file(aoi_path)
+            if self.config.aoi.exclude_indices:
+                self.aoi_gdf = self.aoi_gdf.drop(self.config.aoi.exclude_indices)
+            if self.config.aoi.include_indices:
+                self.aoi_gdf = self.aoi_gdf.loc[self.config.aoi.include_indices]
             self.aoi_gdf['status'] = 'not processed'
             self.aoi_gdf.to_file(self.working_directory / 'aoi_metadata.geojson', driver = 'GeoJSON')
             self.chip_metadata_df = pd.DataFrame(columns=[
@@ -65,6 +69,7 @@ class Downloader:
             self.chip_index = 0
             self.aoi_path = self.working_directory / 'aoi_metadata.geojson'
             self.chip_metadata_path = self.working_directory / 'chip_metadata.csv'
+
     
     def download(self):
         """Download data for all AOIs that have not yet been processed from the AOI GeoJSON file"""
@@ -75,6 +80,7 @@ class Downloader:
                 aoi,
                 self.chip_index,
                 self.working_directory,
+                self.catalog,
                 self.config,
             )
             try:
@@ -83,7 +89,8 @@ class Downloader:
                 self.chip_index += len(aoi_chip_df)
                 aoi_status = 'success'
             except Exception as e:
-                aoi_status = e
+                print(e)
+                aoi_status = str(e)
             finally:
                 self.aoi_gdf.loc[aoi_index, 'status'] = aoi_status
                 self.aoi_gdf.to_file(self.aoi_path, driver='GeoJSON')

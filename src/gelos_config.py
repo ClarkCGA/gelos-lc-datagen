@@ -62,6 +62,8 @@ class DatasetConfig:
 @dataclass
 class AoiConfig:
     version: str
+    include_indices: Optional[List[int]]
+    exclude_indices: Optional[List[int]]
 
 @dataclass
 class DirectoryConfig:
