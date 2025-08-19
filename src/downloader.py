@@ -55,6 +55,7 @@ class Downloader:
                 self.aoi_gdf = self.aoi_gdf.loc[self.config.aoi.include_indices]
             self.aoi_gdf['status'] = 'not processed'
             self.aoi_gdf.to_file(self.working_directory / 'aoi_metadata.geojson', driver = 'GeoJSON')
+            self.aoi_processing_gdf = self.aoi_gdf
             self.chip_metadata_df = pd.DataFrame(columns=[
                         'chip_index',
                         'aoi_index',
@@ -73,7 +74,7 @@ class Downloader:
     
     def download(self):
         """Download data for all AOIs that have not yet been processed from the AOI GeoJSON file"""
-        for aoi_index, aoi in self.aoi_gdf.iterrows():
+        for aoi_index, aoi in self.aoi_processing_gdf.iterrows():
 
             aoi_processor = AOI_Processor(
                 aoi_index,
