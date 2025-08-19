@@ -31,8 +31,8 @@ class ChipGenerator:
  
     def generate_from_aoi(self):
         for name, stack in self.processor.stacks.items():
-            if name == "sentinel_2":
-                continue
+            # if name == "sentinel_2":
+            #     continue
             print(f"loading {name} stack")
             self.processor.stacks[name] = stack.compute()
 

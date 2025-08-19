@@ -68,8 +68,9 @@ def missing_values(array, chip_size, sample_size):
                                y = slice(int((chip_size - sample_size) / 2), int((chip_size + sample_size) / 2))
                               )
     has_nan = array_trimmed.isnull().any()
-    zero_array = array_trimmed.max() == 0
-    missing_values = has_nan or zero_array
+    all_zero_row = (array_trimmed == 0).all(dim='y').any()
+    all_zero_col = (array_trimmed == 0).all(dim='x').any()
+    missing_values = has_nan or all_zero_row or all_zero_col
     return missing_values
  
 def unique_class(window, axis=None, **kwargs):

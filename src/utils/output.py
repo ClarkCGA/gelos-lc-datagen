@@ -23,6 +23,8 @@ def normalize(band):
     '''
     if np.nanmean(band) >= 4000:
         band = band / 6000
+    elif np.max(band) < 1:
+        band = band * 3
     else:
         band = band / 4000
     band = np.clip(band, None, 1)
@@ -43,9 +45,9 @@ def save_thumbnails(array, root_path, index):
         filename = f"{array.name}_{index:06}_{i}_{ts.strftime('%Y%m%d')}.png"
         file_path = os.path.join(root_path, filename)
         
-        blue  = array.isel(time = i,band=0).values.astype(float)
-        green = array.isel(time = i,band=1).values.astype(float)
-        red   = array.isel(time = i,band=2).values.astype(float)
+        blue  = array.isel(time = i,band=1).values.astype(float)
+        green = array.isel(time = i,band=2).values.astype(float)
+        red   = array.isel(time = i,band=3).values.astype(float)
     
         # mask and normalize
         blue = normalize(mask_nodata(blue))
