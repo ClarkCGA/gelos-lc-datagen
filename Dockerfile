@@ -6,6 +6,7 @@ RUN conda env create -f environment.yml
 # Activate the Conda environment
 RUN echo "conda activate gfm_bench" >> ~/.bashrc
 ENV PATH="$PATH:/opt/conda/envs/gfm_bench/bin"
+ENV LOCALTILESERVER_CLIENT_PREFIX='proxy/{port}'
 
 # Create a non-root user and switch to that user
 RUN useradd -m benchuser
@@ -13,9 +14,6 @@ RUN mkdir -p /home/benchuser/.local && chown -R benchuser:benchuser /home/benchu
 USER benchuser
 
 WORKDIR /home/benchuser
-
-#COPY --chown=benchuser main.ipynb .
-#COPY --chown=benchuser:benchuser . /home/benchuser/code
 
 # Expose ports
 EXPOSE 8888

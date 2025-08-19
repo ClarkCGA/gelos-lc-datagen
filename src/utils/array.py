@@ -7,6 +7,7 @@ def process_array(
             epsg: int,
             coords: tuple[float, float],
             array_name: str,
+            chip_size: int,
             sample_size: int,
             resolution: int,
             fill_na: bool = True,

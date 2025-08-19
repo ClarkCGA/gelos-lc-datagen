@@ -9,7 +9,7 @@ import pandas as pd
 class ChipGenerator:
     def __init__(self, processor: "AOI_Processor"):
         self.processor = processor
-        self.chip_entries = {}
+        self.chip_entries = []
         
     def gen_chips(self, index, arrays):
         """
@@ -30,20 +30,27 @@ class ChipGenerator:
         return sentinel_2_dates, sentinel_1_dates, landsat_dates
  
     def generate_from_aoi(self):
-        for name, stack in self.processor.stacks:
+        for name, stack in self.processor.stacks.items():
+            if name == "sentinel_2":
+                continue
             print(f"loading {name} stack")
-            stack = stack.compute()
+            self.processor.stacks[name] = stack.compute()
 
         land_cover_sample_size = int(self.processor.config.chips.sample_size / self.processor.config.land_cover.resolution)
         
-        self.land_cover_uniqueness = self.processor.stacks['land_cover'].coarsen(x = land_cover_sample_size,
+        self.land_cover_min = self.processor.stacks['land_cover'].coarsen(x = land_cover_sample_size,
                                          y = land_cover_sample_size,
                                          boundary = "trim"
-                                        ).reduce(unique_class)
-        self.land_cover_uniqueness[0:2, :] = False
-        self.land_cover_uniqueness[-2:, :] = False
-        self.land_cover_uniqueness[:, 0:2] = False
-        self.land_cover_uniqueness[:, -2:] = False
+                                        ).min()
+        self.land_cover_max = self.processor.stacks['land_cover'].coarsen(x = land_cover_sample_size,
+                                         y = land_cover_sample_size,
+                                         boundary = "trim"
+                                        ).max()
+        self.land_cover_uniqueness = (self.land_cover_min == self.land_cover_max) & (self.land_cover_min > 0)
+        # self.land_cover_uniqueness[0:2, :] = False
+        # self.land_cover_uniqueness[-2:, :] = False
+        # self.land_cover_uniqueness[:, 0:2] = False
+        # self.land_cover_uniqueness[:, -2:] = False
 
         ys, xs = np.where(self.land_cover_uniqueness)
 
@@ -62,14 +69,19 @@ class ChipGenerator:
                 x = xs[index]
                 y = ys[index]
 
+
                 # process the land cover stack first, to check land cover information
                 arrays["land_cover"], footprints["land_cover"] = process_array(
-                    stack = stack,
+                    stack = self.processor.stacks['land_cover'],
                     epsg = self.processor.epsg,
                     coords = (x, y),
                     array_name = "land_cover",
+                    chip_size = self.processor.config.chips.chip_size,
                     sample_size = self.processor.config.chips.sample_size,
                     resolution = self.processor.config.land_cover.resolution,
+                    fill_na = self.processor.config.land_cover.fill_na,
+                    na_value = self.processor.config.land_cover.na_value,
+                    dtype = self.processor.config.land_cover.dtype,
                 )
 
                 if (~np.isin(arrays['land_cover'], [1, 2, 4, 5, 7, 8, 11])).any():
@@ -85,15 +97,18 @@ class ChipGenerator:
 
                 # process th rest of the stacks into arrays
                 for name, stack in self.processor.stacks.items():
+                    if name == 'land_cover':
+                        continue
                     stack_config = getattr(self.processor.config, name)
                     arrays[name], footprints[name] = process_array(
                         stack = stack,
                         epsg = self.processor.epsg,
                         coords = (x, y),
                         array_name = name,
+                        chip_size = self.processor.config.chips.chip_size,
                         sample_size = self.processor.config.chips.sample_size,
                         resolution = stack_config.resolution,
-                        fill_na = False,
+                        fill_na = stack_config.fill_na,
                         na_value = stack_config.na_value,
                         dtype = stack_config.dtype,
                     )
@@ -105,6 +120,7 @@ class ChipGenerator:
                 land_cover_indices[land_cover] += 1
 
             except Exception as e:
+                print(e)
                 status = str(e)    
 
             finally:
