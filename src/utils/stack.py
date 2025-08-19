@@ -52,14 +52,14 @@ def stack_data(
         epsg=epsg,
         resolution=resolution,
         fill_value=np.nan,
-        **bounds_kwargs
+       **bounds_kwargs
     )
     if platform in ['sentinel_2', 'landsat']:
         stack = mask_cloudy_pixels(stack, platform)
 
     if platform not in ['sentinel_2']:
         quarter_times = stack.time.groupby("time.quarter").first()
-        stack = stack.groupby("time.quarter").median("time", skipna=True)
+        stack = stack.groupby("time.quarter").first(skipna=True)
         stack['quarter'] = quarter_times.values
         stack = stack.rename({'quarter': 'time'})
  
@@ -68,9 +68,6 @@ def stack_data(
         raise ValueError(f"{platform} unexpected number of bands")
     if platform in ['sentinel_2', 'landsat']:
         stack = stack.drop_sel(band=cloud_band)
-        stack = stack.chunk(chunks={"band": len(bands) - 1, "x": -1, "y": "auto"})
-    else: 
-        stack = stack.chunk(chunks={"band": len(bands), "x": -1, "y": "auto"})
     
     return stack
 
@@ -91,9 +88,8 @@ def stack_dem_data(items, native_crs, resolution, epsg=None, bbox=None, bbox_is_
         items,
         epsg=epsg,
         resolution=resolution,
-        **bounds_kwargs
-    ).median("time", skipna=True).squeeze()
-    stack = stack.chunk(chunks={"x": -1, "y": "auto"})
+       **bounds_kwargs
+    ).mean(dim="time").squeeze()
     
     return stack
 
@@ -114,9 +110,8 @@ def stack_land_cover_data(items, native_crs, resolution, epsg, bbox, bbox_is_lat
         items,
         epsg=epsg,
         resolution=resolution,
-        **bounds_kwargs
-    ).median("time", skipna=True).squeeze()
-    stack = stack.chunk(chunks={"x": -1, "y": "auto"})
+       **bounds_kwargs
+    ).mean(dim="time").squeeze()
     return stack
 
 def adjust_bbox_to_resolution(bbox, resolution):
