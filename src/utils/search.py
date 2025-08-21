@@ -6,7 +6,13 @@ import pystac
 import geopandas as gpd
 from shapely.geometry import shape
 
-landsat_wrs_gdf = gpd.read_file('https://d9-wret.s3.us-west-2.amazonaws.com/assets/palladium/production/s3fs-public/atoms/files/WRS2_descending_0.zip').to_crs(3857)
+landsat_wrs_path = '/home/benchuser/data/WRS2_descending_0.zip'
+landsat_wrs_url = 'https://d9-wret.s3.us-west-2.amazonaws.com/assets/palladium/production/s3fs-public/atoms/files/WRS2_descending_0.zip'
+
+try:
+    landsat_wrs_gdf = gpd.read_file(landsat_wrs_path).to_crs(3857)
+except:
+    landsat_wrs_gdf = gpd.read_file(landsat_wrs_url).to_crs(3857)
  
 def get_landsat_wrs_path(aoi):
     aoi = gpd.GeoSeries([shape(aoi)], crs=4326).to_crs(3857)
