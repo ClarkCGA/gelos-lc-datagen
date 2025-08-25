@@ -101,12 +101,13 @@ def search_landsat_scenes(aoi, center_datetime, overall_date_range, delta_days, 
     and returns all scenes from that same date for compositing.
     """
     datetime_range = get_clipped_datetime_range(center_datetime, overall_date_range, delta_days)
-
     query = {
         "platform": {"in": platforms},
         "eo:cloud_cover": {"lt": cloud_cover},
-        "landsat:wrs_path": {"eq": landsat_wrs_path}
     }
+    if landsat_wrs_path:
+        query["landsat:wrs_path"] = {"eq": str(landsat_wrs_path).zfill(3)}
+       
     search = catalog.search(
         collections = collection,
         intersects = aoi,

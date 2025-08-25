@@ -89,7 +89,7 @@ class AOI_Processor:
                 self.config.landsat.cloud_cover,
                 self.landsat_wrs_path,
             )
-            if not s1_item:
+            if not landsat_item:
                 raise ValueError("landsat scenes missing")
             landsat_items += landsat_item
 

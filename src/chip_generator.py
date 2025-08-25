@@ -24,6 +24,7 @@ class ChipGenerator:
 
         save_thumbnails(arrays['sentinel_2'], self.processor.working_directory, index)
         save_thumbnails(arrays['landsat'], self.processor.working_directory, index)
+        save_thumbnails(arrays['sentinel_1'], self.processor.working_directory, index)
     
         arrays['land_cover'].rio.to_raster(lc_path)
         arrays['dem'].rio.to_raster(dem_path)
