@@ -43,6 +43,7 @@ class Downloader:
             self.chip_metadata_df = pd.read_csv(self.chip_metadata_path)
             # drop aoi which already have chips generated
             self.aoi_gdf = self.aoi_gdf[self.aoi_gdf.index > self.chip_metadata_df['aoi_index'].max()]
+            self.aoi_processing_gdf = self.aoi_gdf
             self.chip_index = self.chip_metadata_df['chip_index'].max() + 1
 
         # handle the case where the script is starting a new download operation
