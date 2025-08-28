@@ -15,3 +15,6 @@ dependencies:
   - stackstac=0.5.0
   - numpy<2.0
   - tifffile=2024.9.20
+  - pip
+  - pip: 
+    - tenacity 
