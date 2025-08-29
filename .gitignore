@@ -4,3 +4,4 @@ data/*.csv
 data/fire_data/*
 data/fire_data_v1/*
 data/fire_data_*/*
+data/mtbs/
