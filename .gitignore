@@ -1,3 +1,6 @@
 **__pycache__/
 **.ipynb_checkpoints
 **.Trash*/
+data/fire_data_*/*
+data/metadata_df*.csv
+data/mtbs/
