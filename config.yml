@@ -1,6 +1,7 @@
 # Configuration file for chip generation
 dataset:
   version: "v0.40.7"
+  fire: True
 
 aoi:
   version: "v0.30"
@@ -8,8 +9,10 @@ aoi:
   exclude_indices:
 
 directory:
-  working: "/home/benchuser/data"
-  output: "/home/benchuser/final_data"
+  # working: "/home/benchuser/data"
+  # output: "/home/benchuser/final_data"
+  working: "data/interim/data"
+  output: "data/interim/final_data"
 
 log_errors: true
 

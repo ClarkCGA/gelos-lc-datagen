@@ -14,7 +14,6 @@ def pystac_itemcollection_to_gdf(item_collection):
         props['collection'] = item.collection_id
         properties.append(props)
     
-    
     # Create GeoDataFrame
     gdf = gpd.GeoDataFrame(properties, geometry=geometries, crs='EPSG:4326')
     

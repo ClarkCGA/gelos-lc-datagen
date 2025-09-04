@@ -1,3 +1,4 @@
+import calendar
 import numpy as np
 import pandas as pd
 import pdb
@@ -169,3 +170,30 @@ def count_unique_dates(item_collection: pystac.ItemCollection) -> int:
         return 0
     dates = {item.datetime.date() for item in item_collection}
     return len(dates)
+
+def get_quarter_window(year, start_m, end_m):
+    """Return a 'YYYY-MM-DD/YYYY-MM-DD' string for a single quarter."""
+    start = f"{year}-{start_m:02d}-01"
+    end_day = calendar.monthrange(year, end_m)[1]
+    end   = f"{year}-{end_m:02d}-{end_day:02d}"
+    return f"{start}/{end}"
+
+def get_fire_date_ranges(row, n_control_years: int = 7):
+    """returns event and control date ranges for fire chips generation 4 chips per event year
+    + 4 chip for each control year (depending on the availability of Sentinel-2 data)"""
+    post_date   = pd.to_datetime(row["post_date"])
+    event_year  = post_date.year
+    quarters = [(1, 3), (4, 6), (7, 9), (10, 12)]
+
+    event_ranges = [ # Event-year ranges (always 4)
+        get_quarter_window(event_year, sm, em) for sm, em in quarters
+    ]
+    
+    # control-year ranges
+    control_ranges = []
+    for delta in range(1, n_control_years + 1):
+        cy = event_year - delta
+        control_ranges.append([
+            get_quarter_window(cy, sm, em) for sm, em in quarters
+        ])
+    return event_ranges, control_ranges

@@ -1,8 +1,8 @@
 from typing import TYPE_CHECKING
 if TYPE_CHECKING:
-    from src.aoi_processor import AOI_Processor
-from src.utils.output import save_multitemporal_chips, save_thumbnails
-from src.utils.array import unique_class, process_array
+    from aoi_processor import AOI_Processor
+from utils.output import save_multitemporal_chips, save_thumbnails, save_fire_chips
+from utils.array import unique_class, process_array, missing_values, harmonize_to_old, extract_quarterly_fire_chips
 import numpy as np
 import pandas as pd
 
@@ -96,7 +96,7 @@ class ChipGenerator:
                 if land_cover_indices[land_cover] > 400:
                     raise ValueError(f"land_cover_{land_cover}_limit")
 
-                # process th rest of the stacks into arrays
+                # process the rest of the stacks into arrays
                 for name, stack in self.processor.stacks.items():
                     if name == 'land_cover':
                         continue
@@ -139,4 +139,57 @@ class ChipGenerator:
                 self.processor.chip_index += 1
 
         chip_df = pd.DataFrame(self.chip_entries)
-        return chip_df 
+        return chip_df
+    
+    def generate_fire_chips(self, 
+                            stack,
+                            chip_slice,
+                            chip_id_num,
+                            aoi,
+                            aoi_index,
+                            config,
+                            time_series_type,
+                            platform,
+                            metadata_df, 
+                            valid=True
+                            ):
+        chip_quarter_data, valid = extract_quarterly_fire_chips(stack, chip_slice, valid)
+
+        for chip, epsg, quarter_idx in chip_quarter_data:
+            dt = pd.to_datetime(str(chip.time.values[0]))
+            if time_series_type == "event":
+                chip_index = f"{aoi_index:05d}_{chip_id_num:02d}_e_Q{quarter_idx+1}_{dt.strftime('%Y%m%d')}"
+            else:
+                chip_index = f"{aoi_index:05d}_{chip_id_num:02d}_c_Q{quarter_idx+1}_{dt.strftime("%Y%m%d")}"
+
+            try:
+                stack = stack.compute()
+            except:
+                print(f"skipping the AOI for no {platform} data")
+        
+            if stack.shape[2] != 224 or stack.shape[3] != 224:
+                print(f"Skipping chip ID {chip_index} for mismatch dimensions")
+                return metadata_df
+            
+            for crop_idx, stack_cropped in enumerate(stack):
+                if "time" not in stack_cropped.dims:
+                    if "time" in stack_cropped.coords:
+                        stack_cropped = stack_cropped.expand_dims("time")
+                    else:
+                        print(f"Skipping chip ID {chip_index} — no time dimension present")
+                        continue
+                if missing_values(stack_cropped, config['chips']['chip_size'], config['chips']['chip_size']):
+                    print(f"Skipping chip ID {chip_index} for missing values")
+                    continue      
+                
+                if platform == "s2":
+                    stack_cropped = harmonize_to_old(stack_cropped)
+                stack_cropped = stack_cropped.fillna(-999)
+                stack_cropped = stack_cropped.rio.write_nodata(-999)
+                stack_cropped = stack_cropped.astype(np.dtype(np.int16))
+                stack_cropped = stack_cropped.rename(f"{platform}") # TODO: Match configuration according to the platform
+
+                out_path = f"{self.config.directory.output}_{platform}_{chip_index:08}.tif"
+                metadata_df = save_fire_chips(stack, aoi_index, aoi, chip_index, time_series_type, metadata_df, platform, epsg)
+        return metadata_df
+    

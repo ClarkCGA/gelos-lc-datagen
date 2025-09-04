@@ -58,6 +58,7 @@ class ChipConfig:
 @dataclass
 class DatasetConfig:
     version: str
+    fire: Optional[bool]
 
 @dataclass
 class AoiConfig:

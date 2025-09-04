@@ -3,7 +3,8 @@ import pandas as pd
 from PIL import Image
 import os
 import xarray as xr
-
+from array import missing_values
+from src.chip_generator import generate_fire_chips
 def mask_nodata(band, nodata_values=(-999,)):
     '''
     Mask nodata to nan
@@ -121,3 +122,30 @@ def save_multitemporal_chips(array, root_path, index):
         dts.append(ts.strftime('%Y%m%d'))
     return dts
 
+def save_fire_chips(stack, aoi_index, aoi, chip_index, time_series_type, metadata_df, platform, epsg, out_path):
+    for dt in stack.time.values:
+        print(f"Processing chip ID {chip_index} for {time_series_type} date {dt}")
+        ts = pd.to_datetime(str(dt))
+        if os.path.exists(out_path):
+            print(f"Skipping chip ID {chip_index}_{crop_idx} for chip {chip_index} date: {ts.strftime('%Y%m%d')} — file already exists")
+            continue
+        print(f"Saving chip ID {chip_index}_{crop_idx} for chip {chip_index} date: {ts.strftime('%Y%m%d')}")
+        stack.sel(time=dt).squeeze().rio.to_raster(out_path)
+        metadata_df = pd.concat([pd.DataFrame([[f"{chip_index:08}",
+                                                    aoi_index, 
+                                                    ts.strftime('%Y%m%d'),
+                                                    f"{time_series_type}",
+                                                    f"{aoi["source"]}",
+                                                    platform,
+                                                    stack.x[int(len(stack.x)/2)].data,
+                                                    stack.y[int(len(stack.y)/2)].data,
+                                                    epsg,
+                                                    f"{aoi["pre_date"]}",
+                                                    f"{aoi["post_date"]}"]
+                                                ],
+                                                columns=metadata_df.columns
+                                            ),
+                                    metadata_df],
+                                    ignore_index=True
+                                )
+    return metadata_df
