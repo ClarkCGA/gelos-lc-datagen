@@ -1,6 +1,6 @@
 # Configuration file for chip generation
 dataset:
-  version: "v0.40.7"
+  version: "v0.40.8"
   fire: True
 
 aoi:
@@ -112,6 +112,8 @@ land_cover:
   
 # Chip settings
 chips:
-  sample_size: 960  # Size of samples for homogeneity check in meters
-  chip_size: 960  # Final chip size for training data in meters
+  sample_size: 2240  # Size of samples for homogeneity check in meters
+  chip_size: 2240  # Final chip size for training data in meters
+  # sample_size: 224
+  # chip_size: 224
 
