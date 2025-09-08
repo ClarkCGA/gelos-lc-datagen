@@ -3,8 +3,7 @@ import pandas as pd
 from PIL import Image
 import os
 import xarray as xr
-from array import missing_values
-from src.chip_generator import generate_fire_chips
+
 def mask_nodata(band, nodata_values=(-999,)):
     '''
     Mask nodata to nan
@@ -122,7 +121,7 @@ def save_multitemporal_chips(array, root_path, index):
         dts.append(ts.strftime('%Y%m%d'))
     return dts
 
-def save_fire_chips(stack, aoi_index, aoi, chip_index, time_series_type, metadata_df, platform, epsg, out_path):
+def save_fire_chips(stack, aoi_index, aoi, chip_index, crop_idx, time_series_type, metadata_df, epsg, out_path):
     for dt in stack.time.values:
         print(f"Processing chip ID {chip_index} for {time_series_type} date {dt}")
         ts = pd.to_datetime(str(dt))
@@ -136,7 +135,7 @@ def save_fire_chips(stack, aoi_index, aoi, chip_index, time_series_type, metadat
                                                     ts.strftime('%Y%m%d'),
                                                     f"{time_series_type}",
                                                     f"{aoi["source"]}",
-                                                    platform,
+                                                    stack.name,
                                                     stack.x[int(len(stack.x)/2)].data,
                                                     stack.y[int(len(stack.y)/2)].data,
                                                     epsg,

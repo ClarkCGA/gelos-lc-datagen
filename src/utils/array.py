@@ -78,7 +78,7 @@ def missing_values(array, chip_size, sample_size):
 def unique_class(window, axis=None, **kwargs):
     return np.all(window == window[0, 0], axis=axis)
 
-def harmonize_to_old(self, data):
+def harmonize_to_old(data):
     """
     Harmonize new Sentinel-2 data to the old baseline.
 
@@ -135,18 +135,18 @@ def harmonize_to_old(self, data):
     return xr.concat([old, new], dim="time")
 
 
-def select_burnt_chips(self, stack, burn_mask, cfg):
+def select_burnt_chips(stack, burn_mask, config):
     """Return list[(chip_stack, (y0,y1,x0,x1))] filtered by pct-burn."""
     chip_slices = []
-    for y0 in range(0, burn_mask.shape[0] - cfg["chips"]["chip_size"] + 1,
-                cfg["chips"]["chip_size"]):
-        for x0 in range(0, burn_mask.shape[1] - cfg["chips"]["chip_size"] + 1,
-                    cfg["chips"]["chip_size"]):
-            window = burn_mask[y0:y0 + cfg["chips"]["chip_size"],
-                            x0:x0 + cfg["chips"]["chip_size"]]
+    for y0 in range(0, burn_mask.shape[0] - config.chips.chip_size + 1,
+                config.chips.chip_size):
+        for x0 in range(0, burn_mask.shape[1] - config.chips.chip_size + 1,
+                    config.chips.chip_size):
+            window = burn_mask[y0:y0 + config.chips.chip_size,
+                            x0:x0 + config.chips.chip_size]
             if window.mean() >= 0.30:
-                chip_slices.append((y0, y0 + cfg["chips"]["chip_size"],
-                                    x0, x0 + cfg["chips"]["chip_size"]))
+                chip_slices.append((y0, y0 + config.chips.chip_size,
+                                    x0, x0 + config.chips.chip_size))
 
     chips = [
         (stack.isel(y=slice(y0, y1), x=slice(x0, x1), drop=False),
@@ -154,25 +154,21 @@ def select_burnt_chips(self, stack, burn_mask, cfg):
             for y0, y1, x0, x1 in chip_slices
         ]
     return chips
-    
-def extract_quarterly_fire_chips(stack, chip_slice, valid):
+
+def extract_quarterly_fire_chips(stack, chip_slice):
     y0, y1, x0, x1 = chip_slice
     chip_quarter_data = []
-    for quarter_idx, (stack, epsg) in enumerate(stack):
+    for quarter_idx, stack in enumerate(stack):
         if stack is None:
-            valid = False
             break
         chip = stack.isel(y=slice(y0, y1), x=slice(x0, x1), drop=False)
         try:
             chip = chip.compute()
         except Exception:
-            valid = False
             break
         if chip.shape[2:] != (224, 224):
-            valid = False
             break
         if missing_values(chip, 224, 224):
-            valid = False
             break
-        chip_quarter_data.append((chip, epsg, quarter_idx))
-    return chip_quarter_data, valid
+        chip_quarter_data.append((chip, quarter_idx))
+    return chip_quarter_data

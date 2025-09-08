@@ -13,6 +13,7 @@ import shutil
 from src.gelos_config import GELOSConfig
 from src.aoi_processor import AOI_Processor
 from src.utils.search import get_fire_date_ranges
+os.environ["CPL_VSIL_CURL_NUM_CONNECTIONS"] = "20"
 
 class Downloader:
     """This class handles data selection and download for GELOS."""
@@ -40,10 +41,12 @@ class Downloader:
         # handle the case where the script is continuing an existing download operation
         if (self.working_directory / f'chip_metadata.csv').exists():
             if self.config.dataset.fire:
-                self.aoi_path = (self.working_directory / 'fire_events_aoi.csv')
+                self.aoi_path = (self.working_directory / 'fire_events_aoi.geojson')
+                # aoi_df = pd.read_csv(self.aoi_path)
+                # self.aoi_gdf = gpd.GeoDataFrame(aoi_df, geometry=aoi_df.geometry, crs="EPSG:4326")
             else:
                 self.aoi_path = (self.working_directory / 'aoi_metadata.geojson')
-            self.aoi_gdf = gpd.read_file(self.aoi_path)
+            self.aoi_gdf = gpd.read_file(self.aoi_path, geometry='geometry')
             self.chip_metadata_path = self.working_directory / 'chip_metadata.csv'
             self.chip_metadata_df = pd.read_csv(self.chip_metadata_path)
             # drop aoi which already have chips generated
@@ -52,8 +55,8 @@ class Downloader:
             self.chip_index = self.chip_metadata_df['chip_index'].max() + 1
         
         # handle the case where the script is starting a new download operation for fire events
-        elif self.config.dataset.fire and (self.working_directory / f'fire_events_aoi.csv').exists():
-            self.aoi_path = (self.working_directory / 'fire_events_aoi.csv')
+        elif self.config.dataset.fire and (self.working_directory / f'fire_events_aoi.geojson').exists():
+            self.aoi_path = (self.working_directory / 'fire_events_aoi.geojson')
             self.aoi_gdf = gpd.read_file(self.aoi_path)
             self.aoi_processing_gdf = self.aoi_gdf
             self.chip_metadata_df = pd.DataFrame(columns=[ # fire chip metadata
@@ -74,7 +77,8 @@ class Downloader:
 
         # handle the case where the script is starting a new download operation
         else:
-            aoi_path = (f'/home/benchuser/code/data/map_{self.config.aoi.version}.geojson') 
+            # aoi_path = (f'/home/benchuser/code/data/map_{self.config.aoi.version}.geojson')
+            aoi_path = (f'/workspace/Rufai/gfm-bench/data//map_{self.config.aoi.version}.geojson')
             self.aoi_gdf = gpd.read_file(aoi_path)
             if self.config.aoi.exclude_indices:
                 self.aoi_gdf = self.aoi_gdf.drop(self.config.aoi.exclude_indices)
@@ -134,12 +138,10 @@ class Downloader:
             print(f"\nProcessing AOI {aoi_index:02d}")
             event_date_ranges, control_date_ranges = get_fire_date_ranges(
                                                         aoi, 
-                                                        n_control_years=getattr(self.config.fire, "n_control_years", 7)
+                                                        n_control_years=getattr(self.config.dataset.fire, "n_control_years", 7)
                                                         )
             metadata_df = self.chip_metadata_df.copy()
-
             aoi_status = "not processed"
-
             aoi_processor = AOI_Processor(
                 aoi_index=aoi_index,
                 aoi=aoi,
@@ -147,17 +149,19 @@ class Downloader:
                 working_directory=self.working_directory,
                 catalog=self.catalog,
                 config=self.config,
-                event_date_ranges = event_date_ranges, 
-                control_date_ranges = control_date_ranges,
-                metadata_df = metadata_df
             )
-            chip_metadata_df = aoi_processor.generate_time_series()
+            chip_metadata_df = aoi_processor.generate_time_series(event_date_ranges, control_date_ranges, metadata_df)
+            if chip_metadata_df is None:
+                print(f"AOI {aoi_index:02d}: incomplete_event (skipping rest of pipeline for this AOI)")
+                self._persist_progress(aoi_index, "incomplete_event")
+                continue
             self.chip_metadata_df.to_csv(self.chip_metadata_path, index=False)
             aoi_status = "success"
             self._persist_progress(aoi_index, aoi_status)
+        return self.chip_metadata_df
 
 
     def _persist_progress(self, aoi_index, aoi_status):
         self.aoi_gdf.loc[aoi_index, "status"] = aoi_status
-        self.aoi_gdf.to_file(self.aoi_path, driver="GeoJSON")
+        # self.aoi_gdf.to_file(self.aoi_path, driver="GeoJSON")
         self.chip_metadata_df.to_csv(self.chip_metadata_path, index=False)
