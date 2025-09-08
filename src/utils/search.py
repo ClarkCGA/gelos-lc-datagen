@@ -1,4 +1,5 @@
 import calendar
+import json
 import numpy as np
 import pandas as pd
 import pdb
@@ -62,7 +63,12 @@ def search_s1_scenes(aoi, center_datetime, overall_date_range, delta_days, catal
             intersects = aoi,
             datetime = datetime_range
         )
-        orbit_search_items_gdf = gpd.GeoDataFrame.from_features(orbit_search.item_collection().to_dict(), crs=4326).to_crs(3857)
+        orbit_search_dict = orbit_search.item_collection().to_dict()["features"]
+        if not orbit_search_dict:
+            orbit_search_items_gdf = gpd.GeoDataFrame(geometry=[], crs=4326).to_crs(3857)
+            return pystac.ItemCollection([]), None
+        else:
+            orbit_search_items_gdf = gpd.GeoDataFrame.from_features(orbit_search_dict, crs=4326).to_crs(3857)
         aoi_gs = gpd.GeoSeries([shape(aoi)], crs=4326).to_crs(3857)
         orbit_search_orbits_gdf = orbit_search_items_gdf.dissolve(by='sat:relative_orbit')
         intersecting_gdf = orbit_search_orbits_gdf[orbit_search_orbits_gdf.intersects(aoi_gs.iloc[0])].copy()
@@ -181,7 +187,7 @@ def get_quarter_window(year, start_m, end_m):
 def get_fire_date_ranges(row, n_control_years: int = 7):
     """returns event and control date ranges for fire chips generation 4 chips per event year
     + 4 chip for each control year (depending on the availability of Sentinel-2 data)"""
-    post_date   = pd.to_datetime(row["post_date"])
+    post_date   = pd.to_datetime(row.post_date)
     event_year  = post_date.year
     quarters = [(1, 3), (4, 6), (7, 9), (10, 12)]
 
