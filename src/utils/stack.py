@@ -62,7 +62,6 @@ def stack_data(
         stack['quarter'] = quarter_times.values
         stack = stack.rename({'quarter': 'time'})
  
- 
     if len(stack.band) != len(bands):
         raise ValueError(f"{platform} unexpected number of bands")
     if platform in ['sentinel_2', 'landsat']:
@@ -143,3 +142,5 @@ def mask_cloudy_pixels(stack, platform):
         print(f"attempting to cloud mask invalid platform: {platform}")
         return None
     return stack
+
+

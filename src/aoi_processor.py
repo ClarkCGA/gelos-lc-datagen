@@ -34,10 +34,10 @@ class AOI_Processor:
         """
         aoi_gdf = gpd.GeoDataFrame(
             {"geometry": [shape(aoi['geometry'])]},
-            crs="EPSG:4326"
+            crs="EPSG:4326" # check that CRS matches across all Platforms -- Landsat, S1 and S2
         )
         
-        aoi_proj = aoi_gdf.to_crs(stack.rio.crs) # specify the platform not just sentinel_2
+        aoi_proj = aoi_gdf.to_crs(stack.rio.crs)
         
         burn_mask = rasterize(
             [(mapping(aoi_proj['geometry'].iloc[0]), 1)],
@@ -62,6 +62,7 @@ class AOI_Processor:
         else:
             time_ranges = time_ranges
         skip_pipeline = False
+
         s2_items = pystac.item_collection.ItemCollection([])
         for date_range in time_ranges:
             print(f"Searching Sentinel-2 scenes for {date_range}")
@@ -72,7 +73,7 @@ class AOI_Processor:
                 self.config.sentinel_2.collection,
                 self.config.sentinel_2.nodata_pixel_percentage,
                 self.config.sentinel_2.cloud_cover,
-                self.s2_scene_id,
+                self.s2_scene_id
             )
             if not s2_items_season:
                 print(f"Skipping enire loop: no S2 scenes for {date_range}")
@@ -82,7 +83,7 @@ class AOI_Processor:
             s2_items += s2_items_season
         
         if skip_pipeline:
-            print("skipping the rest of the processing pipeline due to a missing S1 Scene")
+            print("skipping the rest of the processing pipeline due to a missing prerequisite Scene")
             return None
 
         if len(s2_items)<4:
@@ -265,7 +266,6 @@ class AOI_Processor:
 
         return self.stacks
 
-
     def process_aoi(self):
         if getattr(self.config, "dataset", None) and getattr(self.config.dataset, "fire", False):
             return self.generate_time_series()
@@ -278,44 +278,53 @@ class AOI_Processor:
         if event_stacks is None:
             print(f"Incomplete event stacks — skipping AOI: {self.aoi_index}")
             return None
+        for key in event_stacks: 
+            platform_event_stack = event_stacks[key]
+            print(f"Extracting burn-rich chip areas from event stack for {key}")
 
-        # extract burn rich chip areas from event stack
-        print("Extracting burn-rich chip areas from event stack...")
-        burn_mask_q1 = self.rasterize_aoi(self.aoi, event_stacks['sentinel_2'][0])
-        event_chip_slices = select_burnt_chips(event_stacks['sentinel_2'][0], burn_mask_q1, self.config)
-        print(f"Found {len(event_chip_slices)} burn-rich chip areas")
+            burn_mask_q1 = self.rasterize_aoi(self.aoi, platform_event_stack[0][0])
+            event_chip_slices = select_burnt_chips(platform_event_stack[0][0], burn_mask_q1, self.config)
+            print(f"Found {len(event_chip_slices)} burn-rich chip areas for {key}")
 
-        for chip_id_num, (chip_da_q1, chip_slice) in enumerate(event_chip_slices):
-            time_series_type = "event"
-            chip_generator = ChipGenerator(self)
-            print("Event Stacks:: ", event_stacks)
-            metadata_df = chip_generator.generate_fire_chips(event_stacks, 
-                                                             chip_slice,
-                                                             chip_id_num,
-                                                             self.aoi,
-                                                             self.aoi_index,
-                                                             self.config,
-                                                             time_series_type,
-                                                             metadata_df)
-            # control chips
-            # for ctrl_year_idx, ctrl_ranges in enumerate(control_date_ranges):
-            for idx, time_range in enumerate(control_date_ranges):
-                    time_series_type = "control"
-                    ctrl_stack = self.stack_aoi(time_range)
-                    chip_generator = ChipGenerator(self)
-                    metadata_df = chip_generator.generate_fire_chips(ctrl_stack,
-                                                                     chip_slice,
-                                                                     chip_id_num,
-                                                                     self.aoi,
-                                                                     self.aoi_index,
-                                                                     self.config,
-                                                                     time_series_type,
-                                                                     metadata_df)
+            for chip_id_num, (_, chip_slice) in enumerate(event_chip_slices):
+                time_series_type = "event"
+                chip_generator = ChipGenerator(self)
+                metadata_df = chip_generator.generate_fire_chips(platform_event_stack,
+                                                                key,
+                                                                chip_slice,
+                                                                chip_id_num,
+                                                                self.aoi,
+                                                                self.aoi_index,
+                                                                self.config,
+                                                                time_series_type,
+                                                                metadata_df)
+                print(metadata_df)
+                # control chips
+                for idx, time_range in enumerate(control_date_ranges):
+                        time_series_type = "control"
+                        ctrl_stacks = self.stack_aoi(time_range)
+                        if ctrl_stacks is None:
+                            print(f"Incomplete control stacks — skipping AOI: {self.aoi_index}")
+                            continue
+                        for key in ctrl_stacks: 
+                            platform_ctrl_stacks = ctrl_stacks[key]
+                            chip_generator = ChipGenerator(self)
+                            metadata_df = chip_generator.generate_fire_chips(platform_ctrl_stacks,
+                                                                            key,
+                                                                            chip_slice,
+                                                                            chip_id_num,
+                                                                            self.aoi,
+                                                                            self.aoi_index,
+                                                                            self.config,
+                                                                            time_series_type,
+                                                                            metadata_df)
 
         self.chip_metadata_df = metadata_df
         return self.chip_metadata_df
-    
+        
     def _persist_progress(self, aoi_index, aoi_status):
         self.aoi_gdf.loc[aoi_index, "status"] = aoi_status
         # self.aoi_gdf.to_file(self.aoi_path, driver="GeoJSON")
         self.chip_metadata_df.to_csv(self.chip_metadata_path, index=False)
+
+

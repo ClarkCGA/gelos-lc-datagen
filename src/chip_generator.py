@@ -2,9 +2,11 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from aoi_processor import AOI_Processor
 from .utils.output import save_multitemporal_chips, save_thumbnails, save_fire_chips
-from .utils.array import unique_class, process_array, missing_values, harmonize_to_old, extract_quarterly_fire_chips
+from .utils.array import unique_class, process_array, missing_values, meters_to_pixels, harmonize_to_old, extract_quarterly_fire_chips
 import numpy as np
 import pandas as pd
+import xarray as xr
+
 
 class ChipGenerator:
     def __init__(self, processor: "AOI_Processor"):
@@ -143,6 +145,7 @@ class ChipGenerator:
     
     def generate_fire_chips(self, 
                             stack,
+                            key,
                             chip_slice,
                             chip_id_num,
                             aoi,
@@ -151,42 +154,44 @@ class ChipGenerator:
                             time_series_type,
                             metadata_df
                             ):
-        chip_quarter_data = extract_quarterly_fire_chips(stack, chip_slice)
-
-        for chip, epsg, quarter_idx in chip_quarter_data:
-            dt = pd.to_datetime(str(chip.time.values[0]))
-            if time_series_type == "event":
-                chip_index = f"{aoi_index:05d}_{chip_id_num:02d}_e_Q{quarter_idx+1}_{dt.strftime('%Y%m%d')}"
-            else:
-                chip_index = f"{aoi_index:05d}_{chip_id_num:02d}_c_Q{quarter_idx+1}_{dt.strftime("%Y%m%d")}"
-
-            try:
-                stack = stack.compute()
-            except:
-                print(f"skipping the AOI for no {stack.name} data")
         
-            if stack.shape[2] != 224 or stack.shape[3] != 224:
-                print(f"Skipping chip ID {chip_index} for mismatch dimensions")
-                return metadata_df
+        chip_quarter_data = extract_quarterly_fire_chips(stack, chip_slice)
+        for chip, quarter_idx in chip_quarter_data:
+            try:
+                chip = chip.compute()
+            except Exception as e:
+                print(f"skipping the AOI for no {key} data")
+                continue
+            if "time" not in chip.dims:
+                chip = chip.expand_dims("time")
             
-            for crop_idx, stack_cropped in enumerate(stack):
-                if "time" not in stack_cropped.dims:
-                    if "time" in stack_cropped.coords:
-                        stack_cropped = stack_cropped.expand_dims("time")
-                    else:
-                        print(f"Skipping chip ID {chip_index} — no time dimension present")
-                        continue
-                if missing_values(stack_cropped, config['chips']['chip_size'], config['chips']['chip_size']):
-                    print(f"Skipping chip ID {chip_index} for missing values")
-                    continue      
+            chip_x, chip_y = meters_to_pixels(chip, config.chips.chip_size)
+            samp_x, samp_y   = meters_to_pixels(chip, config.chips.sample_size)  
+            chip_px = min(int(chip.sizes['x']), int(chip.sizes['y']), chip_x, chip_y)
+            sample_px = min(samp_x, samp_y, chip_px)
                 
-                if stack.name == "sentinel-2":
-                    stack_cropped = harmonize_to_old(stack_cropped)
-                stack_cropped = stack_cropped.fillna(-999)
-                stack_cropped = stack_cropped.rio.write_nodata(-999)
-                stack_cropped = stack_cropped.astype(np.dtype(np.int16))
-                stack_cropped = stack_cropped.rename(f"{stack.name}") # TODO: Match configuration according to the platform
+            if missing_values(chip, chip_px, sample_px):
+                print(f"Skipping chip ID {chip_id_num} for missing values")
+                continue
 
-                out_path = f"{self.config.directory.output}_{stack_cropped.name}_{chip_index:08}.tif"
-                metadata_df = save_fire_chips(stack_cropped, aoi_index, aoi, chip_index, crop_idx, time_series_type, metadata_df, epsg, out_path)
+            # if key == "sentinel_2":
+            #     chip = harmonize_to_old(chip)
+            chip = chip.fillna(-999)
+            chip = chip.rio.write_nodata(-999)
+            chip = chip.astype(np.dtype(np.int16))
+            chip = chip.rename(f"{key}")
+            epsg = int(chip.rio.crs.to_epsg()) if chip.rio.crs else int(chip.coords.get("epsg", xr.DataArray([0])).values[0])
+
+            if chip.rio.crs is None and epsg:
+                chip = chip.rio.write_crs(f"EPSG:{epsg}")
+            chip = chip.assign_coords(
+                x=chip.x.astype(float),
+                y=chip.y.astype(float),
+            )
+            chip = chip.sortby("x")
+            chip = chip.sortby("y", ascending=False)
+
+            metadata_df = save_fire_chips(chip, aoi_index, aoi, chip_id_num, time_series_type, metadata_df, epsg, config, quarter_idx, key)
         return metadata_df
+
+

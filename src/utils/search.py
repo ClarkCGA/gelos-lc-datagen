@@ -203,3 +203,5 @@ def get_fire_date_ranges(row, n_control_years: int = 7):
             get_quarter_window(cy, sm, em) for sm, em in quarters
         ])
     return event_ranges, control_ranges
+
+

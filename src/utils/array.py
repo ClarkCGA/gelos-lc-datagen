@@ -72,8 +72,7 @@ def missing_values(array, chip_size, sample_size):
     has_nan = array_trimmed.isnull().any()
     all_zero_row = (array_trimmed == 0).all(dim='y').any()
     all_zero_col = (array_trimmed == 0).all(dim='x').any()
-    missing_values = has_nan or all_zero_row or all_zero_col
-    return missing_values
+    return has_nan or all_zero_row or all_zero_col
  
 def unique_class(window, axis=None, **kwargs):
     return np.all(window == window[0, 0], axis=axis)
@@ -117,10 +116,12 @@ def harmonize_to_old(data):
             "B08",
             "B8A",
             "B09",
-            "B10",
+            # "B10",
             "B11",
             "B12",
         ]
+    
+    print("Bands:", data.band.values)
 
     old = data.sel(time=slice(cutoff))
 
@@ -135,40 +136,45 @@ def harmonize_to_old(data):
     return xr.concat([old, new], dim="time")
 
 
+def meters_to_pixels(stack, meters):
+    """Convert a distance in meters to (px_x, px_y) using the stack's georesolution."""
+    rx, ry = stack.rio.resolution()  # ry is negative in north-up rasters
+    px_x = max(1, int(round(meters / abs(rx))))
+    px_y = max(1, int(round(meters / abs(ry))))
+    return px_x, px_y
+
 def select_burnt_chips(stack, burn_mask, config):
-    """Return list[(chip_stack, (y0,y1,x0,x1))] filtered by pct-burn."""
+    """Return [(chip_stack, (y0,y1,x0,x1))] for windows whose burn fraction >= threshold."""
+    chip_px_x, chip_px_y = meters_to_pixels(stack, config.chips.chip_size)
+    stride_px_x, stride_px_y = meters_to_pixels(stack, getattr(config.chips, "stride_m", config.chips.chip_size))
+
+    H, W = int(burn_mask.shape[0]), int(burn_mask.shape[1])
     chip_slices = []
-    for y0 in range(0, burn_mask.shape[0] - config.chips.chip_size + 1,
-                config.chips.chip_size):
-        for x0 in range(0, burn_mask.shape[1] - config.chips.chip_size + 1,
-                    config.chips.chip_size):
-            window = burn_mask[y0:y0 + config.chips.chip_size,
-                            x0:x0 + config.chips.chip_size]
-            if window.mean() >= 0.30:
-                chip_slices.append((y0, y0 + config.chips.chip_size,
-                                    x0, x0 + config.chips.chip_size))
+    for y0 in range(0, max(1, H - chip_px_y + 1), stride_px_y):
+        for x0 in range(0, max(1, W - chip_px_x + 1), stride_px_x):
+            window = burn_mask[y0:y0 + chip_px_y, x0:x0 + chip_px_x]
+            if window.size == 0:
+                continue
+            if np.nanmean(window) >= getattr(config.chips, "burn_threshold", 0.30):
+                chip_slices.append((y0, y0 + chip_px_y, x0, x0 + chip_px_x))
 
     chips = [
-        (stack.isel(y=slice(y0, y1), x=slice(x0, x1), drop=False),
-            (y0, y1, x0, x1))
-            for y0, y1, x0, x1 in chip_slices
-        ]
+        (stack.isel(y=slice(y0, y1), x=slice(x0, x1), drop=False), (y0, y1, x0, x1))
+        for (y0, y1, x0, x1) in chip_slices
+    ]
     return chips
+
 
 def extract_quarterly_fire_chips(stack, chip_slice):
     y0, y1, x0, x1 = chip_slice
     chip_quarter_data = []
     for quarter_idx, stack in enumerate(stack):
-        if stack is None:
-            break
         chip = stack.isel(y=slice(y0, y1), x=slice(x0, x1), drop=False)
         try:
             chip = chip.compute()
         except Exception:
             break
-        if chip.shape[2:] != (224, 224):
-            break
-        if missing_values(chip, 224, 224):
-            break
         chip_quarter_data.append((chip, quarter_idx))
     return chip_quarter_data
+
+
