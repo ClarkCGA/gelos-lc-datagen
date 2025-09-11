@@ -11,8 +11,6 @@ from shapely.geometry import shape
 import warnings
 warnings.filterwarnings("ignore")
 
-
-
 # utility functions for extracting wildfire events from S2 WCD and MTBS datasets
 def add_start_date(event_id):
     start_date = pd.to_datetime(event_id[-8:], format="%Y%m%d")
@@ -82,3 +80,5 @@ def filter_fires_by_date(fire_gdf, start_date, end_date):
     fire_gdf["pre_date"] = fire_gdf["Pre_ID"].apply(add_pre_date)
     fire_gdf["post_date"] = fire_gdf["Post_ID"].apply(add_post_date)
     return fire_gdf
+
+

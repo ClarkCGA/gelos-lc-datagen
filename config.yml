@@ -11,8 +11,8 @@ aoi:
 directory:
   # working: "/home/benchuser/data"
   # output: "/home/benchuser/final_data"
-  working: "data/interim/data"
-  output: "data/interim/final_data"
+  working: "data/interim/data/"
+  output: "data/interim/final_data/"
 
 log_errors: true
 
@@ -37,7 +37,7 @@ sentinel_2:
   - "B08"
   - "B8A"
   - "B09"
-  #- "B10"
+  # - "B10"
   - "B11"
   - "B12"
   - "SCL"
@@ -114,6 +114,5 @@ land_cover:
 chips:
   sample_size: 2240  # Size of samples for homogeneity check in meters
   chip_size: 2240  # Final chip size for training data in meters
-  # sample_size: 224
-  # chip_size: 224
-
+  stride: 2240
+  burn_threshold: 0.30

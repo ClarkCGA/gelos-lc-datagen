@@ -54,6 +54,8 @@ class LandCoverConfig(PlatformConfig):
 class ChipConfig:
     sample_size: int
     chip_size: int
+    stride: int
+    burn_threshold: int
 
 @dataclass
 class DatasetConfig:
