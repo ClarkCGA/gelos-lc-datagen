@@ -1,13 +1,7 @@
-import pdb
-import xarray as xr
-import rioxarray as rxr
 from src.gelos_config import GELOSConfig
 from src.chip_generator import ChipGenerator
 import pystac
 import pandas as pd
-import geopandas as gpd
-from shapely.geometry import mapping, shape
-from rasterio.features import rasterize
 
 from .utils.search import search_s2_scenes, search_s1_scenes, search_landsat_scenes, search_annual_scene, count_unique_dates, get_landsat_wrs_path
 from .utils.stack import stack_data, stack_dem_data, stack_land_cover_data, pystac_itemcollection_to_gdf
@@ -224,7 +218,6 @@ class AOI_Processor:
             if time_series_type == "event":
                 burn_mask = rasterize_aoi(self.aoi, self.stacks["landsat"][0][0])
                 self.event_chip_slices = get_chip_slices(self.stacks["landsat"][0][0], burn_mask, self.config)
-                # print(f"Found {len(self.chip_slices)} burn-rich chip areas for AOI {self.aoi_index}")
             chip_generator = ChipGenerator(self)
             return chip_generator.generate_time_series(time_series_type, metadata_df)
         else:
