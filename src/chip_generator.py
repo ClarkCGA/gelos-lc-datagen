@@ -2,11 +2,12 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from aoi_processor import AOI_Processor
 from .utils.output import save_multitemporal_chips, save_thumbnails, save_fire_chips
-from .utils.array import unique_class, process_array, missing_values, meters_to_pixels, harmonize_to_old, extract_quarterly_fire_chips
+from .utils.array import unique_class, process_array, missing_values, harmonize_to_old
 import numpy as np
 import pandas as pd
 import xarray as xr
-
+from shapely.geometry import Polygon, box, shape, mapping
+import geopandas as gpd
 
 class ChipGenerator:
     def __init__(self, processor: "AOI_Processor"):
@@ -143,43 +144,43 @@ class ChipGenerator:
         chip_df = pd.DataFrame(self.chip_entries)
         return chip_df
     
-    def generate_fire_chips(self, 
-                            stack,
-                            key,
-                            chip_slice,
-                            chip_id_num,
-                            aoi,
-                            aoi_index,
-                            config,
-                            time_series_type,
-                            metadata_df
-                            ):
-        
-        chip_quarter_data = extract_quarterly_fire_chips(stack, chip_slice)
-        for chip, quarter_idx in chip_quarter_data:
+    def gen_fire_chips(self,
+                       stack, #chips per quarter per year
+                       sensor_name,
+                       chip_slice,
+                       config
+                       ):
+        y0, y1, x0, x1 = chip_slice
+        resolution = abs(stack[0].rio.resolution()[0])
+        sample_size = int(config.chips.sample_size / resolution)
+        chip_size = int(config.chips.chip_size / resolution)
+
+        results = []
+        for q_idx, q_stack in enumerate(stack):
+            status = None
+            chip = q_stack.isel(y=slice(y0, y1), x=slice(x0, x1), drop=False)
             try:
                 chip = chip.compute()
             except Exception as e:
-                print(f"skipping the AOI for no {key} data")
+                print(f"{e} for {sensor_name} Q_{q_idx+1} data")
+                status = str(e)
                 continue
+                
             if "time" not in chip.dims:
                 chip = chip.expand_dims("time")
-            
-            chip_x, chip_y = meters_to_pixels(chip, config.chips.chip_size)
-            samp_x, samp_y   = meters_to_pixels(chip, config.chips.sample_size)  
-            chip_px = min(int(chip.sizes['x']), int(chip.sizes['y']), chip_x, chip_y)
-            sample_px = min(samp_x, samp_y, chip_px)
                 
-            if missing_values(chip, chip_px, sample_px):
-                print(f"Skipping chip ID {chip_id_num} for missing values")
-                continue
-
-            # if key == "sentinel_2":
-            #     chip = harmonize_to_old(chip)
+            if sensor_name == "sentinel_2":
+                chip = harmonize_to_old(chip)
             chip = chip.fillna(-999)
             chip = chip.rio.write_nodata(-999)
             chip = chip.astype(np.dtype(np.int16))
-            chip = chip.rename(f"{key}")
+            chip = chip.rename(f"{sensor_name}")
+
+            if missing_values(chip, chip_size, sample_size):
+                print(f"{sensor_name} slice Q{q_idx+1} skipped: missing values")
+                # raise ValueError(f"{sensor_name} missing values")
+                continue
+            
             epsg = int(chip.rio.crs.to_epsg()) if chip.rio.crs else int(chip.coords.get("epsg", xr.DataArray([0])).values[0])
 
             if chip.rio.crs is None and epsg:
@@ -190,8 +191,54 @@ class ChipGenerator:
             )
             chip = chip.sortby("x")
             chip = chip.sortby("y", ascending=False)
+            
+            native_footprint = gpd.GeoSeries([box(*chip.rio.bounds())], crs=chip.rio.crs)
+            # Reproject the GeoSeries to EPSG:4326 and get the geometry
+            footprint = native_footprint.to_crs("EPSG:4326").iloc[0]
 
-            metadata_df = save_fire_chips(chip, aoi_index, aoi, chip_id_num, time_series_type, metadata_df, epsg, config, quarter_idx, key)
-        return metadata_df
+            status = "success" if status is None else status
+            results.append((chip, footprint.wkt, epsg, status))
 
+        return results
 
+    def generate_time_series(self, time_series_type, metadata_df):
+        chip_slices = (self.processor.event_chip_slices if time_series_type == "event" 
+                                      else self.processor.event_chip_slices)
+       
+        for chip_index, chip_slice in enumerate(chip_slices):
+            for sensor_name, stack in self.processor.stacks.items():
+                print(f"Extracting burn-rich chip areas from {time_series_type} stack for {sensor_name}")
+                try:
+                    results = self.gen_fire_chips(
+                        stack, sensor_name, chip_slice, self.processor.config
+                    )
+                except Exception as e:
+                    print(f"{sensor_name} chip slice {chip_index} error {e}")
+                    status = str(e)
+                    continue
+                for chip, footprint, epsg, status in results:
+                    try:
+                        metadata_df = save_fire_chips(
+                            chip,
+                            self.processor.aoi_index,
+                            self.processor.aoi,
+                            chip_index,
+                            time_series_type,
+                            metadata_df,
+                            epsg,
+                            self.processor.config,
+                            footprint,
+                            sensor_name, 
+                            status
+                        )
+                    except Exception as e:
+                        print(f"{sensor_name} chip {chip_index} error {e}")
+                        status = str(e)
+                        continue
+        self.chip_metadata_df = metadata_df
+        return self.chip_metadata_df
+    
+    def _persist_progress(self, aoi_index, aoi_status):
+        self.aoi_gdf.loc[aoi_index, "status"] = aoi_status
+        # self.aoi_gdf.to_file(self.aoi_path, driver="GeoJSON")
+        self.chip_metadata_df.to_csv(self.chip_metadata_path, index=False)

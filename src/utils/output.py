@@ -121,47 +121,46 @@ def save_multitemporal_chips(array, root_path, index):
         dts.append(ts.strftime('%Y%m%d'))
     return dts
 
-def save_fire_chips(stack, aoi_index, aoi, chip_id_num, time_series_type, metadata_df, epsg, config, quarter_idx, key):
+def save_fire_chips(stack, aoi_index, aoi, chip_id_num, time_series_type, metadata_df, epsg, config, footprint, key, status):
     for dt in stack.time.values:
         ts = pd.to_datetime(str(dt))
-
-        if time_series_type == "event":
-            chip_index = f"{aoi_index:05d}_{chip_id_num:02d}_e_Q{quarter_idx+1}_{ts.strftime('%Y%m%d')}"
-        else:
-            chip_index = f"{aoi_index:05d}_{chip_id_num:02d}_c_Q{quarter_idx+1}_{ts.strftime('%Y%m%d')}"
+        date_tag = ts.strftime('%Y%m%d')
+        chip_index = (f"{aoi_index:05d}_{chip_id_num:02d}_"
+                      f"{'e' if time_series_type=='event' else 'c'}_{date_tag}")
         out_path = f"{config.directory.output}/{key}_{chip_index}.tif"
+
+        slice_da = stack.sel(time=dt) if dt is not None else stack.squeeze()
+        if slice_da.rio.crs is None and epsg:
+            slice_da = slice_da.rio.write_crs(f"EPSG:{epsg}")
+
+        # ensure numeric, monotonic coords for rioxarray
+        slice_da = slice_da.assign_coords(
+            x=slice_da.x.astype(float),
+            y=slice_da.y.astype(float),
+        ).sortby("x").sortby("y", ascending=False)
 
         if not os.path.exists(out_path):
             print(f"Saving chip {chip_index}")
-            # stack.sel(time=dt).squeeze().rio.to_raster(out_path)
-            slice_da = stack.sel(time=dt).squeeze()
-            if slice_da.rio.crs is None and epsg:
-                slice_da = slice_da.rio.write_crs(f"EPSG:{epsg}")
-
-            # ensure numeric, monotonic coords for rioxarray
-            slice_da = slice_da.assign_coords(
-                x=slice_da.x.astype(float),
-                y=slice_da.y.astype(float),
-            )
-            slice_da = slice_da.sortby("x").sortby("y", ascending=False)
-
             slice_da.rio.to_raster(out_path)
         else:
             print(f"File {out_path} exists!")
-        new_row = pd.DataFrame([[f"{chip_index:08}",
-                                                    aoi_index, 
-                                                    ts.strftime('%Y%m%d'),
-                                                    f"{time_series_type}",
-                                                    f"{aoi['source']}",
-                                                    key,
-                                                    stack.x[int(len(stack.x)/2)].data,
-                                                    stack.y[int(len(stack.y)/2)].data,
-                                                    epsg,
-                                                    f"{aoi['pre_date']}",
-                                                    f"{aoi['post_date']}"]
-                                                ],
-                                                columns=metadata_df.columns
-                                            )
+        
+        new_row = pd.DataFrame([[f"{chip_index}",
+                                    aoi_index, 
+                                    ts.strftime('%Y%m%d'),
+                                    f"{time_series_type}",
+                                    f"{aoi['source']}",
+                                    key,
+                                    stack.x[int(len(stack.x)/2)].data,
+                                    stack.y[int(len(stack.y)/2)].data,
+                                    epsg,
+                                    f"{aoi['pre_date']}",
+                                    f"{aoi['post_date']}"],
+                                    footprint,
+                                    status
+                                ],
+                                columns=metadata_df.columns
+                            )
         metadata_df = pd.concat([metadata_df, new_row], ignore_index=True)
     return metadata_df
 
