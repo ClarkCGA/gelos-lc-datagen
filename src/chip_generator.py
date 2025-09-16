@@ -195,13 +195,15 @@ class ChipGenerator:
             native_footprint = gpd.GeoSeries([box(*chip.rio.bounds())], crs=chip.rio.crs)
             # Reproject the GeoSeries to EPSG:4326 and get the geometry
             footprint = native_footprint.to_crs("EPSG:4326").iloc[0]
+            footprint = footprint.wkt
 
             status = "success" if status is None else status
-            results.append((chip, footprint.wkt, epsg, status))
+            results.append((chip, footprint, epsg, status))
 
         return results
 
     def generate_time_series(self, time_series_type, metadata_df):
+        start_len = len(metadata_df)
         chip_slices = (self.processor.event_chip_slices if time_series_type == "event" 
                                       else self.processor.event_chip_slices)
        
@@ -217,8 +219,7 @@ class ChipGenerator:
                     status = str(e)
                     continue
                 for chip, footprint, epsg, status in results:
-                    try:
-                        metadata_df = save_fire_chips(
+                    metadata_df = save_fire_chips(
                             chip,
                             self.processor.aoi_index,
                             self.processor.aoi,
@@ -231,14 +232,5 @@ class ChipGenerator:
                             sensor_name, 
                             status
                         )
-                    except Exception as e:
-                        print(f"{sensor_name} chip {chip_index} error {e}")
-                        status = str(e)
-                        continue
-        self.chip_metadata_df = metadata_df
-        return self.chip_metadata_df
-    
-    def _persist_progress(self, aoi_index, aoi_status):
-        self.aoi_gdf.loc[aoi_index, "status"] = aoi_status
-        # self.aoi_gdf.to_file(self.aoi_path, driver="GeoJSON")
-        self.chip_metadata_df.to_csv(self.chip_metadata_path, index=False)
+        return metadata_df.iloc[start_len:].copy()
+
