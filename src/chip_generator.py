@@ -233,4 +233,3 @@ class ChipGenerator:
                             status
                         )
         return metadata_df.iloc[start_len:].copy()
-
