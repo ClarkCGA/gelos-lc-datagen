@@ -1,6 +1,6 @@
 # Configuration file for chip generation
 dataset:
-  version: "v0.40.7"
+  version: "v0.40.9"
 
 aoi:
   version: "v0.30"

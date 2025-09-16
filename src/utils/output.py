@@ -93,7 +93,7 @@ def save_thumbnails(array, root_path, index):
         file_path = os.path.join(root_path, filename)
 
         if array.name == 'sentinel_1':
-            rgb_8bit = create_s1_rgb_composite(array.iself(time=i))
+            rgb_8bit = create_s1_rgb_composite(array.isel(time=i))
         else:
             blue  = array.isel(time = i,band=1).values.astype(float)
             green = array.isel(time = i,band=2).values.astype(float)

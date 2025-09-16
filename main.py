@@ -3,7 +3,7 @@ from src.gelos_config import GELOSConfig
 from src.downloader import Downloader
 import shutil
 from pathlib import Path
-# from src.cleaner import Cleaner
+from src.data_cleaner import DataCleaner
 
 def main():
     parser = argparse.ArgumentParser(description='Run GFM benchmark pipeline')
@@ -22,8 +22,8 @@ def main():
     downloader = Downloader(gelosconfig)
     downloader.download()
     
-    # cleaner = Cleaner(gelosconfig)
-    # cleaner.clean()
+    cleaner = DataCleaner(gelosconfig)
+    cleaner.clean()
     
 if __name__ == '__main__':
     main()
