@@ -56,11 +56,11 @@ def stack_data(
     if platform in ['sentinel_2', 'landsat']:
         stack = mask_cloudy_pixels(stack, platform)
 
-    if platform not in ['sentinel_2']:
-        quarter_times = stack.time.groupby("time.quarter").first()
-        stack = stack.groupby("time.quarter").first(skipna=True)
-        stack['quarter'] = quarter_times.values
-        stack = stack.rename({'quarter': 'time'})
+    # if platform not in ['sentinel_2']:
+    #     quarter_times = stack.time.groupby("time.quarter").first()
+    #     stack = stack.groupby("time.quarter").first(skipna=True)
+    #     stack['quarter'] = quarter_times.values
+    #     stack = stack.rename({'quarter': 'time'})
  
     if len(stack.band) != len(bands):
         raise ValueError(f"{platform} unexpected number of bands")

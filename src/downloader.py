@@ -13,6 +13,7 @@ import shutil
 from src.gelos_config import GELOSConfig
 from src.aoi_processor import AOI_Processor
 from src.utils.search import get_fire_date_ranges
+
 os.environ["CPL_VSIL_CURL_NUM_CONNECTIONS"] = "20"
 
 class Downloader:
@@ -85,7 +86,9 @@ class Downloader:
                     "y_center",
                     "epsg",
                     "pre_date",
-                    "post_date"
+                    "post_date",
+                    'chip_footprint',
+                    'status',
                     ])
             self.chip_index = 0
             self.chip_metadata_path = self.working_directory / 'chip_metadata.csv'
@@ -93,7 +96,7 @@ class Downloader:
         # handle the case where the script is starting a new download operation
         else:
             # aoi_path = (f'/home/benchuser/code/data/map_{self.config.aoi.version}.geojson')
-            aoi_path = (f'/workspace/Rufai/gfm-bench/data//map_{self.config.aoi.version}.geojson') # TODO: make configurable with working directory in config
+            aoi_path = (self.working_directory / f'/map_{self.config.aoi.version}.geojson')
             self.aoi_gdf = gpd.read_file(aoi_path)
             if self.config.aoi.exclude_indices:
                 self.aoi_gdf = self.aoi_gdf.drop(self.config.aoi.exclude_indices)
@@ -150,12 +153,14 @@ class Downloader:
 
     def download_fire(self):
         for aoi_index, aoi in self.aoi_processing_gdf.iterrows():
-            print(f"\nProcessing AOI {aoi_index:02d}")
             event_date_ranges, control_date_ranges = get_fire_date_ranges(
                                                         aoi, 
-                                                        n_control_years=getattr(self.config.dataset.fire, "n_control_years", 7)
-                                                        )
-            metadata_df = self.chip_metadata_df.copy()
+                                                        n_control_years=getattr(
+                                                        self.config.dataset.fire, 
+                                                        "n_control_years", 
+                                                        7)
+                                                    )
+            
             aoi_status = "not processed"
             aoi_processor = AOI_Processor(
                 aoi_index=aoi_index,
@@ -165,26 +170,38 @@ class Downloader:
                 catalog=self.catalog,
                 config=self.config,
             )
-            chip_metadata_df = aoi_processor.generate_time_series(event_date_ranges, control_date_ranges, metadata_df)
-            if chip_metadata_df is None:
-                print(f"AOI {aoi_index:02d}: incomplete_event (skipping rest of pipeline for this AOI)")
-                self._persist_progress(aoi_index, "incomplete_event")
-                continue
-            self.chip_metadata_df = chip_metadata_df
-            self.chip_metadata_df.drop_duplicates(
-                subset=["chip_index","platform","date"], keep="last", inplace=True
-                )
-            # flush every AOI
-            self.chip_metadata_df.to_csv(self.chip_metadata_path, index=False)
-            aoi_status = "success"
-            self._persist_progress(aoi_index, aoi_status)
-        return self.chip_metadata_df
+            try:
+                print(f"Processing Event Chips for AOI {aoi_index:02d}")
+                aoi_chip_df = aoi_processor.process_aoi("event", event_date_ranges, self.chip_metadata_df)
+                self.chip_metadata_df = aoi_chip_df
+                self.chip_metadata_df.drop_duplicates(subset=["chip_index","platform","date"], keep="last", inplace=True)
+                self.chip_metadata_df.to_csv(self.chip_metadata_path, index=False)
+            except Exception as e:
+                print(f"[event-error] AOI {aoi_index:02d}: {e}")
+            
+            for ctrl_dates in control_date_ranges:
+                try:
+                    print(f"Processing Control Chips for AOI {aoi_index:02d}")
+                    aoi_chip_df = aoi_processor.process_aoi("control", ctrl_dates, self.chip_metadata_df)
+                    self.chip_metadata_df = aoi_chip_df
+                    self.chip_metadata_df.drop_duplicates(
+                        subset=["chip_index","platform","date"], keep="last", inplace=True
+                    )
+                    self.chip_metadata_df.to_csv(self.chip_metadata_path, index=False)
+                except Exception as e:
+                    print(f"[control-error] AOI {aoi_index:02d}: {e}")
 
+                # self._persist_progress(aoi_index, aoi_status)
+            # except Exception as e:
+            #     print(e)
+            #     aoi_status = str(e)
+                # finally:
+                #     self.aoi_gdf.loc[aoi_index, 'status'] = aoi_status
+                #     self.aoi_gdf.to_file(self.aoi_path, driver='GeoJSON')
+                #     self.chip_metadata_df.to_csv(self.chip_metadata_path, index=False)
+        # return self.chip_metadata_df
 
     def _persist_progress(self, aoi_index, aoi_status):
         self.aoi_gdf.loc[aoi_index, "status"] = aoi_status
         # self.aoi_gdf.to_file(self.aoi_path, driver="GeoJSON")
         self.chip_metadata_df.to_csv(self.chip_metadata_path, index=False)
-
-
-

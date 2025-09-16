@@ -1,7 +1,8 @@
 from datetime import datetime
 import numpy as np
 import xarray as xr
-from shapely.geometry import Polygon, box
+from shapely.geometry import Polygon, box, shape, mapping
+from rasterio.features import rasterize
 import geopandas as gpd
     
 def process_array( 
@@ -138,12 +139,12 @@ def harmonize_to_old(data):
 
 def meters_to_pixels(stack, meters):
     """Convert a distance in meters to (px_x, px_y) using the stack's georesolution."""
-    rx, ry = stack.rio.resolution()  # ry is negative in north-up rasters
+    rx, ry = stack.rio.resolution()
     px_x = max(1, int(round(meters / abs(rx))))
     px_y = max(1, int(round(meters / abs(ry))))
     return px_x, px_y
 
-def select_burnt_chips(stack, burn_mask, config):
+def get_chip_slices(stack, burn_mask, config):
     """Return [(chip_stack, (y0,y1,x0,x1))] for windows whose burn fraction >= threshold."""
     chip_px_x, chip_px_y = meters_to_pixels(stack, config.chips.chip_size)
     stride_px_x, stride_px_y = meters_to_pixels(stack, getattr(config.chips, "stride_m", config.chips.chip_size))
@@ -157,24 +158,30 @@ def select_burnt_chips(stack, burn_mask, config):
                 continue
             if np.nanmean(window) >= getattr(config.chips, "burn_threshold", 0.30):
                 chip_slices.append((y0, y0 + chip_px_y, x0, x0 + chip_px_x))
-
-    chips = [
-        (stack.isel(y=slice(y0, y1), x=slice(x0, x1), drop=False), (y0, y1, x0, x1))
-        for (y0, y1, x0, x1) in chip_slices
-    ]
-    return chips
+    
+    return chip_slices
 
 
-def extract_quarterly_fire_chips(stack, chip_slice):
-    y0, y1, x0, x1 = chip_slice
-    chip_quarter_data = []
-    for quarter_idx, stack in enumerate(stack):
-        chip = stack.isel(y=slice(y0, y1), x=slice(x0, x1), drop=False)
-        try:
-            chip = chip.compute()
-        except Exception:
-            break
-        chip_quarter_data.append((chip, quarter_idx))
-    return chip_quarter_data
-
-
+def rasterize_aoi(aoi, stack):
+    """ Rasterize the AOI polygon into a burn mask aligned with the given stack."""
+    aoi_gdf = gpd.GeoDataFrame(
+            {"geometry": [shape(aoi['geometry'])]},
+            crs="EPSG:4326"
+    )
+        
+    aoi_proj = aoi_gdf.to_crs(stack.rio.crs)
+        
+    burn_mask = rasterize(
+        [(mapping(aoi_proj['geometry'].iloc[0]), 1)],
+        out_shape=(stack.sizes['y'], stack.sizes['x']),
+        transform=stack.rio.transform(), 
+        fill=0,
+        dtype='uint8'
+    )
+        
+    burn_mask_da = xr.DataArray(
+        burn_mask,
+        coords={"y": stack["y"], "x": stack["x"]},
+        dims=("y", "x")
+    )
+    return burn_mask_da
