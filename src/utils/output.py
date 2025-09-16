@@ -121,7 +121,8 @@ def save_multitemporal_chips(array, root_path, index):
         dts.append(ts.strftime('%Y%m%d'))
     return dts
 
-def save_fire_chips(stack, aoi_index, aoi, chip_id_num, time_series_type, metadata_df, epsg, config, footprint, key, status):
+def save_fire_chips(stack, aoi_index, aoi, chip_id_num, time_series_type, 
+                    metadata_df, epsg, config, footprint, key, status):
     for dt in stack.time.values:
         ts = pd.to_datetime(str(dt))
         date_tag = ts.strftime('%Y%m%d')
@@ -144,24 +145,28 @@ def save_fire_chips(stack, aoi_index, aoi, chip_id_num, time_series_type, metada
             slice_da.rio.to_raster(out_path)
         else:
             print(f"File {out_path} exists!")
-        
-        new_row = pd.DataFrame([[f"{chip_index}",
-                                    aoi_index, 
-                                    ts.strftime('%Y%m%d'),
-                                    f"{time_series_type}",
-                                    f"{aoi['source']}",
-                                    key,
-                                    stack.x[int(len(stack.x)/2)].data,
-                                    stack.y[int(len(stack.y)/2)].data,
-                                    epsg,
-                                    f"{aoi['pre_date']}",
-                                    f"{aoi['post_date']}"],
-                                    footprint,
-                                    status
-                                ],
-                                columns=metadata_df.columns
-                            )
-        metadata_df = pd.concat([metadata_df, new_row], ignore_index=True)
+
+        row = {
+            "chip_index": chip_index,
+            "aoi_index":  aoi_index,
+            "date":       date_tag,
+            "type":       time_series_type,
+            "source":     f"{aoi['source']}",
+            "platform":   key,
+            "x_center":   stack.x[int(len(stack.x)/2)].data,
+            "y_center":   stack.y[int(len(stack.y)/2)].data,
+            "epsg":       epsg,
+            "pre_date":   f"{aoi['pre_date']}",
+            "post_date":  f"{aoi['post_date']}",
+            "chip_footprint": footprint,            
+            "status":     status or "success",
+        }
+        for k in row:
+            if k not in metadata_df.columns:
+                metadata_df[k] = pd.Series(dtype=object)
+
+        metadata_df = pd.concat(
+            [metadata_df, pd.DataFrame([{k: row.get(k) for k in metadata_df.columns}])],
+            ignore_index=True
+        )
     return metadata_df
-
-
