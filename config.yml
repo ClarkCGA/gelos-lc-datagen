@@ -1,10 +1,10 @@
 # Configuration file for chip generation
 dataset:
-  version: "v0.40.8"
+  version: "v0.20.5"
   fire: True
 
 aoi:
-  version: "v0.30"
+  version: "v0.20"
   include_indices:
   exclude_indices:
 
@@ -12,7 +12,9 @@ directory:
   # working: "/home/benchuser/data"
   # output: "/home/benchuser/final_data"
   working: "data/interim/data/"
-  output: "data/interim/final_data/"
+  output: "data/interim/data/test/final_data_v20_5/"
+  # working: "data/v2.5.1/"
+  # output: "data/v2.5.1/final_data/"
 
 log_errors: true
 
@@ -24,7 +26,7 @@ sentinel_2:
     - "2023-04-01/2023-06-30" # (Apr-May-Jun)
     - "2023-07-01/2023-09-30" # (Jul-Aug-Sep)
     - "2023-10-01/2023-12-31" # (Oct-Nov-Dec)
-  cloud_cover: 50  # Maximum allowed cloud cover percentage in scene
+  cloud_cover: 30  # Maximum allowed cloud cover percentage in scene
   nodata_pixel_percentage : 5 # Maximum missing data percentage in scene
   bands:
   - "B01"
@@ -43,7 +45,7 @@ sentinel_2:
   - "SCL"
   cloud_band: "SCL"
   resolution: 10  # Spatial resolution in meters
-  native_crs: true
+  native_crs: True
   fill_na: false
   na_value: -999 
   dtype: "int16"
@@ -55,7 +57,7 @@ sentinel_1:
   nodata_pixel_percentage : 5 # Maximum missing data percentage in scene
   bands: ["vv", "vh"]  # VV, VH
   resolution: 10  # Spatial resolution in meters
-  native_crs: false # False gets crs of S2, True gets crs of first Landsat scene              
+  native_crs: False # False gets crs of S2, True gets crs of first Landsat scene              
   fill_na: false
   na_value: -999 
   dtype: "float32"
@@ -65,7 +67,7 @@ landsat:
   delta_days: 91 # get the full season for landsat
   collection: "landsat-c2-l2"
   platforms: ["landsat-8", "landsat-9"]
-  cloud_cover: 100  # Maximum allowed cloud cover percentage in scene
+  cloud_cover: 30  # Maximum allowed cloud cover percentage in scene
   # landsat does not have a nodata pixel percentage property
   bands:
   - "coastal"    # Coastal/Aerosol (Band 1)
@@ -112,7 +114,7 @@ land_cover:
   
 # Chip settings
 chips:
-  sample_size: 2240  # Size of samples for homogeneity check in meters
-  chip_size: 2240  # Final chip size for training data in meters
-  stride: 2240
+  sample_size: 960  # Size of samples for homogeneity check in meters
+  chip_size: 960  # Final chip size for training data in meters
+  stride: 960
   burn_threshold: 0.30
