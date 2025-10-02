@@ -2,11 +2,15 @@ from src.gelos_config import GELOSConfig
 from src.chip_generator import ChipGenerator
 import pystac
 import pandas as pd
+import numpy as np
 
 from .utils.search import search_s2_scenes, search_s1_scenes, search_landsat_scenes, search_annual_scene, count_unique_dates, get_landsat_wrs_path
 from .utils.stack import stack_data, stack_dem_data, stack_land_cover_data, pystac_itemcollection_to_gdf
-from .utils.array import rasterize_aoi, get_chip_slices
+from .utils.array import rasterize_aoi
 from functools import reduce
+import geopandas as gpd
+from shapely.geometry import box
+
 
 class AOI_Processor:
     """Responsible for processing one AOI, managed by Downloader"""
@@ -21,6 +25,7 @@ class AOI_Processor:
         self.s2_scene_id = None
         self.landsat_wrs_path = None
         self.s1_relative_orbit = None
+        self.valid_event_chip_ids = set()
 
     def process_aoi(self, time_series_type=None, time_ranges=None, metadata_df=None):
         """Process one AOI by searching and stacking data sources"""
@@ -150,7 +155,7 @@ class AOI_Processor:
         # get the intersection of all data sources as the bounding box for stacks
         overlap = reduce(lambda x, y: x.intersection(y), combined_geoms)
         self.overlap_bounds = overlap.bounds
-
+        
         print("stacking landsat data...")
         self.stacks['landsat'] = stack_data(
             landsat_items,
@@ -164,7 +169,8 @@ class AOI_Processor:
             bbox_is_latlon = True
         )
         
-        overlap_bbox = self.stacks['landsat'].rio.bounds()
+        landsat_bounds = self.stacks['landsat'].rio.bounds()
+        overlap_bbox = landsat_bounds
 
         if not self.config.dataset.fire:
             print("stacking dem data...")
@@ -216,8 +222,7 @@ class AOI_Processor:
 
         if getattr(self.config, "dataset", None) and getattr(self.config.dataset, "fire", False):
             if time_series_type == "event":
-                burn_mask = rasterize_aoi(self.aoi, self.stacks["landsat"][0][0])
-                self.event_chip_slices = get_chip_slices(self.stacks["landsat"][0][0], burn_mask, self.config)
+                self.burn_mask = rasterize_aoi(self.aoi, self.stacks["sentinel_2"][0][0])
             chip_generator = ChipGenerator(self)
             return chip_generator.generate_time_series(time_series_type, metadata_df)
         else:
