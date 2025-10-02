@@ -30,7 +30,9 @@ def stack_data(
     bbox=None,
     bbox_is_latlon=True,
 ):
-
+    """
+    Stack data from STAC items into a xarray dataset, supporting both bbox-based and index-based approaches.
+    """
     if bbox is None:
         bbox = items[0].bbox
     
@@ -40,32 +42,39 @@ def stack_data(
         except:
             epsg = int(items[0].properties["proj:code"].split(":")[-1])
     
+    # Handle bbox alignment
     bounds_param = "bounds_latlon" if bbox_is_latlon else "bounds"
-    if not bbox_is_latlon:
-        bbox = adjust_bbox_to_resolution(bbox, resolution)
     bounds_kwargs = {bounds_param: bbox}
 
+    if bbox is not None:
+        bounds_kwargs[bounds_param] = bbox
+    
+    # Stack data using stackstac
     stack = stackstac.stack(
         items,
         assets=bands,
         epsg=epsg,
         resolution=resolution,
         fill_value=np.nan,
-       **bounds_kwargs
+        xy_coords='center',
+        **bounds_kwargs
     )
     if platform in ['sentinel_2', 'landsat']:
         stack = mask_cloudy_pixels(stack, platform)
+        stack = stack.fillna(-999)
 
-    # if platform not in ['sentinel_2']:
-    #     quarter_times = stack.time.groupby("time.quarter").first()
-    #     stack = stack.groupby("time.quarter").first(skipna=True)
-    #     stack['quarter'] = quarter_times.values
-    #     stack = stack.rename({'quarter': 'time'})
+    if platform not in ['sentinel_2']:
+        quarter_times = stack.time.groupby("time.quarter").first()
+        stack = stack.fillna(-999)
+        stack = stack.groupby("time.quarter").first(skipna=True)
+        stack['quarter'] = quarter_times.values
+        stack = stack.rename({'quarter': 'time'})
  
     if len(stack.band) != len(bands):
         raise ValueError(f"{platform} unexpected number of bands")
     if platform in ['sentinel_2', 'landsat']:
         stack = stack.drop_sel(band=cloud_band)
+    stack = stack.rio.write_nodata(-999)
     
     return stack
 
@@ -119,10 +128,10 @@ def adjust_bbox_to_resolution(bbox, resolution):
     minx, miny, maxx, maxy = bbox
     bbox_adjusted = (minx + r, miny, maxx, maxy - r)
     return bbox_adjusted
-   
+
 def mask_cloudy_pixels(stack, platform):
     if platform == "landsat":
-        qa = stack.sel(band="qa_pixel").astype("uint16")
+        qa = stack.sel(band="qa_pixel").notnull().astype("uint16")
         
         # Define bitmask for cloud-related flags
         mask_bitfields = [1, 2, 3, 4]
@@ -142,5 +151,3 @@ def mask_cloudy_pixels(stack, platform):
         print(f"attempting to cloud mask invalid platform: {platform}")
         return None
     return stack
-
-
