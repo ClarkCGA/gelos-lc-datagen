@@ -121,8 +121,6 @@ def harmonize_to_old(data):
             "B11",
             "B12",
         ]
-    
-    print("Bands:", data.band.values)
 
     old = data.sel(time=slice(cutoff))
 
@@ -140,8 +138,8 @@ def harmonize_to_old(data):
 def meters_to_pixels(stack, meters):
     """Convert a distance in meters to (px_x, px_y) using the stack's georesolution."""
     rx, ry = stack.rio.resolution()
-    px_x = max(1, int(round(meters / abs(rx))))
-    px_y = max(1, int(round(meters / abs(ry))))
+    px_x = max(1, int(np.floor(meters / abs(rx))))
+    px_y = max(1, int(np.floor(meters / abs(ry))))
     return px_x, px_y
 
 def get_chip_slices(stack, burn_mask, config):
@@ -158,7 +156,6 @@ def get_chip_slices(stack, burn_mask, config):
                 continue
             if np.nanmean(window) >= getattr(config.chips, "burn_threshold", 0.30):
                 chip_slices.append((y0, y0 + chip_px_y, x0, x0 + chip_px_x))
-    
     return chip_slices
 
 
@@ -184,4 +181,8 @@ def rasterize_aoi(aoi, stack):
         coords={"y": stack["y"], "x": stack["x"]},
         dims=("y", "x")
     )
+    burn_mask_da = burn_mask_da.rio.write_crs(stack.rio.crs)
+    burn_mask_da = burn_mask_da.rio.write_transform(stack.rio.transform())
     return burn_mask_da
+
+

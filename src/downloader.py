@@ -75,7 +75,7 @@ class Downloader:
             self.aoi_path = (self.working_directory / 'fire_events_aoi.geojson')
             self.aoi_gdf = gpd.read_file(self.aoi_path)
             self.aoi_processing_gdf = self.aoi_gdf
-            self.chip_metadata_df = pd.DataFrame(columns=[ # fire chip metadata
+            self.chip_metadata_df = pd.DataFrame(columns=[ # fire chip metadata # TODO: read in existing chip_metadata if exists
                     "chip_index",
                     "aoi_index",
                     "date",
@@ -161,7 +161,6 @@ class Downloader:
                                                         "n_control_years", 
                                                         7)
                                                     )
-            aoi_status = "not processed"
             aoi_processor = AOI_Processor(
                 aoi_index=aoi_index,
                 aoi=aoi,
@@ -174,20 +173,24 @@ class Downloader:
                 print(f"Processing Event Chips for AOI {aoi_index:02d}")
                 aoi_chip_df = aoi_processor.process_aoi("event", event_date_ranges, self.chip_metadata_df)
                 self.chip_metadata_df = pd.concat([self.chip_metadata_df, aoi_chip_df], ignore_index=True)
+                aoi_status = "success"
             except Exception as e:
                 print(f"[event-error] AOI {aoi_index:02d}: {e}")
+                aoi_status = str(e)
             
             for ctrl_dates in control_date_ranges:
                 try:
                     print(f"Processing Control Chips for AOI {aoi_index:02d}")
                     aoi_chip_df = aoi_processor.process_aoi("control", ctrl_dates, self.chip_metadata_df)
                     self.chip_metadata_df = pd.concat([self.chip_metadata_df, aoi_chip_df], ignore_index=True)
+                    aoi_status = "success"
                 except Exception as e:
                     print(f"[control-error] AOI {aoi_index:02d}: {e}")
+                    aoi_status = str(e)
             
             self.aoi_gdf.loc[aoi_index, 'status'] = aoi_status
             self.aoi_gdf.to_file(self.aoi_path, driver='GeoJSON')
-            self.chip_metadata_df.drop_duplicates(
-                        subset=["chip_index","platform","date"], keep="last", inplace=True
-                    )
+            # self.chip_metadata_df.drop_duplicates(
+            #             subset=["chip_index","platform","date"], keep="last", inplace=True
+            #         )
             self.chip_metadata_df.to_csv(self.chip_metadata_path, index=False)

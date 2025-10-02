@@ -122,31 +122,23 @@ def save_multitemporal_chips(array, root_path, index):
     return dts
 
 def save_fire_chips(stack, aoi_index, aoi, chip_id_num, time_series_type, 
-                    metadata_df, epsg, config, footprint, key, status):
-    for dt in stack.time.values:
-        ts = pd.to_datetime(str(dt))
+                    metadata_df, epsg, config, footprint, key, status, ts):
+    # for dt in stack.time.values: 
+    if ts is not None:
         date_tag = ts.strftime('%Y%m%d')
         chip_index = (f"{aoi_index:05d}_{chip_id_num:02d}_"
                       f"{'e' if time_series_type=='event' else 'c'}_{date_tag}")
-        out_path = f"{config.directory.output}/{key}_{chip_index}.tif"
+    
+    out_path = f"{config.directory.output}/{key}_{chip_index}.tif"
+    stack = stack.sel(time=pd.to_datetime(ts)).squeeze() if ts else stack.squeeze()
 
-        slice_da = stack.sel(time=dt) if dt is not None else stack.squeeze()
-        if slice_da.rio.crs is None and epsg:
-            slice_da = slice_da.rio.write_crs(f"EPSG:{epsg}")
+    if not os.path.exists(out_path):
+        print(f"Saving chip {chip_index}")
+        stack.rio.to_raster(out_path)
+    else:
+        print(f"File {out_path} exists!")
 
-        # ensure numeric, monotonic coords for rioxarray
-        slice_da = slice_da.assign_coords(
-            x=slice_da.x.astype(float),
-            y=slice_da.y.astype(float),
-        ).sortby("x").sortby("y", ascending=False)
-
-        if not os.path.exists(out_path):
-            print(f"Saving chip {chip_index}")
-            slice_da.rio.to_raster(out_path)
-        else:
-            print(f"File {out_path} exists!")
-
-        row = {
+    row = {
             "chip_index": chip_index,
             "aoi_index":  aoi_index,
             "date":       date_tag,
@@ -159,14 +151,14 @@ def save_fire_chips(stack, aoi_index, aoi, chip_id_num, time_series_type,
             "pre_date":   f"{aoi['pre_date']}",
             "post_date":  f"{aoi['post_date']}",
             "chip_footprint": footprint,            
-            "status":     status or "success",
+            "status":     status,
         }
-        for k in row:
+    for k in row:
             if k not in metadata_df.columns:
                 metadata_df[k] = pd.Series(dtype=object)
 
-        metadata_df = pd.concat(
+    metadata_df = pd.concat(
             [metadata_df, pd.DataFrame([{k: row.get(k) for k in metadata_df.columns}])],
             ignore_index=True
-        )
+    )
     return metadata_df
