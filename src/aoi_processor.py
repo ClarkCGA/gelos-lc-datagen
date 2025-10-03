@@ -30,10 +30,6 @@ class AOI_Processor:
     def process_aoi(self, time_series_type=None, time_ranges=None, metadata_df=None):
         """Process one AOI by searching and stacking data sources"""
         print(f"\nProcessing AOI at index {self.aoi_index}")
-        if not self.config.dataset.fire:
-            time_ranges = self.config.sentinel_2.time_ranges
-        else:
-            time_ranges = time_ranges
 
         s2_items = pystac.item_collection.ItemCollection([])
         for date_range in time_ranges:
@@ -77,7 +73,7 @@ class AOI_Processor:
                 self.config.sentinel_1.collection,
                 self.s1_relative_orbit,
             )
-            if not s1_item:
+            if time_series_type == 'event' and not s1_item:
                 raise ValueError("s1 scenes missing")
 
             s1_items += s1_item
@@ -93,10 +89,11 @@ class AOI_Processor:
                 self.config.landsat.cloud_cover,
                 self.landsat_wrs_path,
             )
-            if not landsat_item:
+            if time_series_type == 'event' and not landsat_item:
                 raise ValueError("landsat scenes missing")
 
             landsat_items += landsat_item
+        
         is_control = (time_series_type == "control")
 
         if not is_control and count_unique_dates(landsat_items) < 4:
@@ -104,50 +101,15 @@ class AOI_Processor:
 
         if not is_control and count_unique_dates(s1_items) < 4:
             raise ValueError(f"s1 scenes missing")
-            
-        if not self.config.dataset.fire:
-            print("searching land cover data...")
-            land_cover_items = search_annual_scene(
-                self.s2_bbox,
-                self.config.land_cover.year,
-                self.catalog,
-                self.config.land_cover.collection,
-            )
-            if not land_cover_items:
-                raise ValueError(f"land_cover data missing")
-        
-        if not self.config.dataset.fire:
-            print("searching dem data...")
-            dem_items = search_annual_scene(
-                self.s2_bbox,
-                self.config.dem.year,
-                self.catalog,
-                self.config.dem.collection,
-            )
-            if not dem_items:
-                raise ValueError(f"dem data missing")
-
-        # first, get area of overlap of all item bboxes
-        if not self.config.dataset.fire:
-            self.itemcollections = {
-                "sentinel_2": s2_items,
-                "sentinel_1": s1_items,
-                "landsat": landsat_items,
-                "land_cover": land_cover_items,
-                "dem": dem_items
-            }
-        else:
-            self.itemcollections = {
-                "sentinel_1": s1_items,
-                "sentinel_2": s2_items,
-                "landsat": landsat_items,
-            }
+  
+        self.itemcollections = {
+            "sentinel_1": s1_items,
+            "sentinel_2": s2_items,
+            "landsat": landsat_items,
+        }
 
         bbox_gdf = pd.concat([pystac_itemcollection_to_gdf(items) for items in self.itemcollections.values()])
         bbox_gdf.to_file(self.working_directory / f"{self.aoi_index}_stac_items.json", driver="GeoJSON")
-        
-        # group scenes which share a collection and date
-        # bbox_gdf['date'] = bbox_gdf.apply(lambda x: x.datetime.date())
         bbox_gdf['datetime'] = pd.to_datetime(bbox_gdf['datetime'], format="mixed")
         bbox_gdf['date'] = bbox_gdf['datetime'].dt.date
         combined_geoms = bbox_gdf.groupby(['collection', 'date'])['geometry'].apply(lambda x: x.unary_union)
@@ -171,28 +133,6 @@ class AOI_Processor:
         
         landsat_bounds = self.stacks['landsat'].rio.bounds()
         overlap_bbox = landsat_bounds
-
-        if not self.config.dataset.fire:
-            print("stacking dem data...")
-            self.stacks['dem'] = stack_dem_data(
-                dem_items, 
-                self.config.dem.native_crs,
-                self.config.dem.resolution, 
-                self.epsg, 
-                overlap_bbox,
-                bbox_is_latlon=False
-            )
-
-        if not self.config.dataset.fire:
-            print("stacking land cover data...")
-            self.stacks['land_cover'] = stack_land_cover_data(
-                land_cover_items, 
-                self.config.land_cover.native_crs,
-                self.config.land_cover.resolution, 
-                self.epsg, 
-                overlap_bbox,
-                bbox_is_latlon=False
-            )
 
         print("stacking sentinel_1 data...")
         self.stacks['sentinel_1'] = stack_data(
@@ -221,10 +161,6 @@ class AOI_Processor:
         )
 
         if getattr(self.config, "dataset", None) and getattr(self.config.dataset, "fire", False):
-            if time_series_type == "event":
-                self.burn_mask = rasterize_aoi(self.aoi, self.stacks["sentinel_2"][0][0])
+            self.burn_mask = rasterize_aoi(self.aoi, self.stacks["sentinel_2"][0][0])
             chip_generator = ChipGenerator(self)
             return chip_generator.generate_time_series(time_series_type, metadata_df)
-        else:
-            chip_generator = ChipGenerator(self)
-            return chip_generator.generate_from_aoi()
