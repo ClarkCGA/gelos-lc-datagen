@@ -139,4 +139,5 @@ class ChipGenerator:
                 self.processor.chip_index += 1
 
         chip_df = pd.DataFrame(self.chip_entries)
+        chip_gdf = gpd.GeoDataFrame
         return chip_df 

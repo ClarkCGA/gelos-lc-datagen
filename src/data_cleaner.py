@@ -39,7 +39,7 @@ class DataCleaner:
             max_count = metadata_gdf.groupby("land_cover").count().max().iloc[0]
             min_count = metadata_gdf.groupby("land_cover").count().min().iloc[0]
             
-            # use sampling factor to caland_coverulate correction factor, for proportional class drop quantities
+            # use sampling factor to calculate correction factor, for proportional class drop quantities
             max_distance = max_count - min_count
             max_end_value = min_count * sampling_factor
             max_distance_to_max_end_value = max_count - max_end_value
@@ -62,6 +62,7 @@ class DataCleaner:
         metadata_gdf['x_center'] = metadata_gdf.geometry.centroid.x
         metadata_gdf['y_center'] = metadata_gdf.geometry.centroid.y
         metadata_gdf = metadata_gdf.rename(columns={"chip_index": "original_chip_id"})
+        metadata_gdf.index = metadata_gdf['chip_id']
 
         (self.output_dir / self.version).mkdir(exist_ok=True)
         metadata_gdf.to_file(self.output_dir / f'{self.version}/cleaned_df.geojson', driver='GeoJSON', index=False)
@@ -85,7 +86,7 @@ class DataCleaner:
         shutil.make_archive(output_zip_file, 'zip', folder_to_zip)
 
 def main():
-    config = GELOSConfig.from_file('config.yml')
+    config = GELOSConfig.from_yaml('/home/benchuser/code/config.yml')
     cleaner = DataCleaner(config)
     cleaner.clean()
 

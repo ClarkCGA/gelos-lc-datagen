@@ -203,7 +203,8 @@ class AOI_Processor:
         )
 
         chip_generator = ChipGenerator(self)
-        return chip_generator.generate_from_aoi()
+        chip_df = chip_generator.generate_from_aoi()
+        return chip_df
         
 
 
