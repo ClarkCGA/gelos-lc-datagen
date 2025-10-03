@@ -11,10 +11,10 @@ aoi:
 directory:
   # working: "/home/benchuser/data"
   # output: "/home/benchuser/final_data"
-  working: "data/interim/data/"
-  output: "data/interim/data/test/final_data_v20_5/"
-  # working: "data/v2.5.1/"
-  # output: "data/v2.5.1/final_data/"
+  # working: "data/interim/data/"
+  # output: "data/interim/data/test/final_data_v20_5/"
+  working: "data/v2.5.1/"
+  output: "data/v2.5.1/final_data/"
 
 log_errors: true
 
