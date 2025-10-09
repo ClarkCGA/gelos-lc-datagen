@@ -3,6 +3,8 @@ from src.chip_generator import ChipGenerator
 import pystac
 import pandas as pd
 import numpy as np
+from datetime import datetime
+import time
 
 from .utils.search import search_s2_scenes, search_s1_scenes, search_landsat_scenes, search_annual_scene, count_unique_dates, get_landsat_wrs_path
 from .utils.stack import stack_data, stack_dem_data, stack_land_cover_data, pystac_itemcollection_to_gdf
@@ -22,10 +24,12 @@ class AOI_Processor:
         self.chip_index = chip_index
         self.working_directory = working_directory
         self.stacks = {}
+        self.event_chip_slices = {}
         self.s2_scene_id = None
         self.landsat_wrs_path = None
         self.s1_relative_orbit = None
         self.valid_event_chip_ids = set()
+        self.event_overlap_bounds = None  # Store event overlap bounds for reuse
 
     def process_aoi(self, time_series_type=None, time_ranges=None, metadata_df=None):
         """Process one AOI by searching and stacking data sources"""
@@ -108,15 +112,27 @@ class AOI_Processor:
             "landsat": landsat_items,
         }
 
-        bbox_gdf = pd.concat([pystac_itemcollection_to_gdf(items) for items in self.itemcollections.values()])
-        bbox_gdf.to_file(self.working_directory / f"{self.aoi_index}_stac_items.json", driver="GeoJSON")
-        bbox_gdf['datetime'] = pd.to_datetime(bbox_gdf['datetime'], format="mixed")
-        bbox_gdf['date'] = bbox_gdf['datetime'].dt.date
-        combined_geoms = bbox_gdf.groupby(['collection', 'date'])['geometry'].apply(lambda x: x.unary_union)
-        
-        # get the intersection of all data sources as the bounding box for stacks
-        overlap = reduce(lambda x, y: x.intersection(y), combined_geoms)
-        self.overlap_bounds = overlap.bounds
+        # Process geometries and set bounds
+        if time_series_type == 'event':
+            # For event time series, calculate and store overlap bounds
+            bbox_gdf = pd.concat([pystac_itemcollection_to_gdf(items) for items in self.itemcollections.values()])
+            bbox_gdf.to_file(self.working_directory / f"{self.aoi_index}_event_stac_items.json", driver="GeoJSON")
+            bbox_gdf['datetime'] = pd.to_datetime(bbox_gdf['datetime'], format="mixed")
+            bbox_gdf['date'] = bbox_gdf['datetime'].dt.date
+            combined_geoms = bbox_gdf.groupby(['collection', 'date'])['geometry'].apply(lambda x: x.unary_union)
+            
+            # get the intersection of all data sources as the bounding box for stacks
+            overlap = reduce(lambda x, y: x.intersection(y), combined_geoms)
+            self.event_overlap_bounds = overlap.bounds  # Store for reuse
+            self.overlap_bounds = self.event_overlap_bounds
+        elif time_series_type == 'control':
+            bbox_gdf = pd.concat([pystac_itemcollection_to_gdf(items) for items in self.itemcollections.values()])
+            year_key = datetime.strptime(time_ranges[0][:10], "%Y-%m-%d").year
+            bbox_gdf.to_file(self.working_directory / f"{self.aoi_index}_control_{year_key}_stac_items.json", driver="GeoJSON")
+            # For control time series, reuse event overlap bounds if available
+            if self.event_overlap_bounds is None:
+                raise ValueError("No event overlap bounds available. Process event time series first.")
+            self.overlap_bounds = self.event_overlap_bounds
         
         print("stacking landsat data...")
         self.stacks['landsat'] = stack_data(
