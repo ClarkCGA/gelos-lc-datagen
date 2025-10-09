@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from aoi_processor import AOI_Processor
 from .utils.output import save_multitemporal_chips, save_thumbnails, save_fire_chips
-from .utils.array import unique_class, process_array, missing_values, harmonize_to_old, get_chip_slices
+from .utils.array import unique_class, process_array, missing_values, harmonize_to_old, get_chip_slices, rasterize_aoi
 import numpy as np
 import pandas as pd
 import xarray as xr
@@ -10,18 +10,21 @@ import rasterio
 import rioxarray 
 from shapely.geometry import Polygon, box, shape, mapping
 import geopandas as gpd
+import time
 
 class ChipGenerator:
     def __init__(self, processor: "AOI_Processor"):
         self.processor = processor
         self.chip_entries = []
+        self.sensor_burn_masks= {}
+        self.sensor_chip_slices= {}
+        self.allowed_slice_ids = None
         
     def gen_fire_chips(self, stack, sensor_name, config):
         """Generate chips for all burn areas in this sensor's stack"""
         resolution = abs(stack[0].rio.resolution()[0])
         sample_size = int(config.chips.sample_size / resolution)
         chip_size = int(config.chips.chip_size / resolution)
-
         chip_slices = self.sensor_chip_slices[sensor_name]
         
         if not chip_slices:
@@ -30,28 +33,22 @@ class ChipGenerator:
         
         all_results = []
         for slice_idx, (y0, y1, x0, x1) in enumerate(chip_slices):
+            if self.allowed_slice_ids is not None and slice_idx not in self.allowed_slice_ids: # generate control chips only from event chip locations
+                print("chips not available in the event chips")
+                continue
             slice_results = []
             for q_idx, q_stack in enumerate(stack):
                 status = None
                 try:
-                    # Use pixel indices directly - they're in this sensor's grid!
                     chip = q_stack.isel(y=slice(y0, y1), x=slice(x0, x1))
                     chip = chip.compute()
 
-                    if np.isnan(chip).any():
-                        print(f"WARNING: NaN found in {sensor_name} Q{q_idx+1}, filling with -999")
-                        chip = chip.fillna(-999)
-                    
-                    if (chip == 0).all():
-                        raise ValueError(f"All zeros in {sensor_name} quarter {q_idx+1}")
-                    
                     if "time" not in chip.dims:
                         chip = chip.expand_dims("time")
                         
                     epsg = int(chip.rio.crs.to_epsg()) if chip.rio.crs else self.processor.epsg
                     if chip.rio.crs is None and epsg:
                         chip = chip.rio.write_crs(f"EPSG:{epsg}")
-                        
                     chip = chip.assign_coords(
                         x=chip.x.astype(float),
                         y=chip.y.astype(float),
@@ -62,6 +59,9 @@ class ChipGenerator:
                     if sensor_name == "sentinel_2":
                         chip = harmonize_to_old(chip)
                     
+                    if missing_values(chip, chip_size, sample_size):
+                        raise ValueError(f"Missing values for {sensor_name} quarter {q_idx+1}")
+                    
                     chip = chip.fillna(-999)
                     chip = chip.rio.write_nodata(-999)
                     chip = chip.rename(f"{sensor_name}")
@@ -69,9 +69,6 @@ class ChipGenerator:
                     if np.isnan(chip.values).any():
                         raise ValueError(f"NaN values still present after filling")
 
-                    if missing_values(chip, chip_size, sample_size):
-                        raise ValueError(f"Missing values for {sensor_name} quarter {q_idx+1}")
-                    
                     status = "success"
                     ts = pd.to_datetime(str(chip.time.values[0])) if "time" in chip.dims else pd.to_datetime(str(q_stack.time.values[0]))
                     quarter = int(pd.Timestamp(ts).quarter)
@@ -97,59 +94,54 @@ class ChipGenerator:
         required_quarters = {1, 2, 3, 4}
         
         for name, stack in self.processor.stacks.items():
-            self.processor.stacks[name] = stack.persist()
-
-       
-
+            print(f"Computing Stack for {name} sensor")
+            start_time = time.perf_counter()
+            # self.processor.stacks[name] = stack.persist()
+            self.processor.stacks[name] = stack.compute()
+            end_time = time.perf_counter()
+            elapsed_time = end_time - start_time
+            print(f"Elapsed time: {elapsed_time:.8f} seconds")
 
         print(f"Generating event chips for AOI {self.processor.aoi_index}")
+        
+        print(f"Extracting Chip Indices")
+        start_time = time.perf_counter()
+        
         self.sensor_burn_masks = {}
         self.sensor_chip_slices = {}
-
         all_sensor_results = {}
 
-        if not hasattr(self.processor, 'sensor_chip_slices') or self.processor.sensor_chip_slices is None:
-            print("Computing chip slices (first time for this AOI)...")
-            self.sensor_burn_masks = {}
-            self.sensor_chip_slices = {}
-            
+        if time_series_type == "control":
+            if not self.processor.valid_event_chip_ids:
+                print("[skip-controls] No event chips recorded for this AOI.")
+                return metadata_df.iloc[start_len:].copy()
+            self.allowed_slice_ids = set(self.processor.valid_event_chip_ids)
+            self.sensor_chip_slices = self.processor.event_chip_slices
+            print(f"Generating control chips from {len(self.allowed_slice_ids)} event chip locations.")
+        
+        elif time_series_type == "event":
             for sensor_name, stack in self.processor.stacks.items():
-                print(f"Extracting burn-rich chip areas from stack for {sensor_name}")
-                burn_mask = self.processor.burn_mask.rio.reproject_match(
-                    stack[0][0],
-                    resampling=rasterio.enums.Resampling.nearest
-                )
+                print(f"Extracting burn-rich chip areas from {time_series_type} stack for {sensor_name}")
+                self.burn_mask = rasterize_aoi(self.processor.aoi, stack[0][0])
+                burn_mask = self.burn_mask.rio.reproject_match(
+                        stack[0][0],
+                        resampling=rasterio.enums.Resampling.nearest
+                        )
                 self.sensor_burn_masks[sensor_name] = burn_mask.compute()
-                self.sensor_chip_slices[sensor_name] = get_chip_slices(
-                    stack[0][0], burn_mask, self.processor.config
-                )
-                print(f"  {sensor_name}: {len(self.sensor_chip_slices[sensor_name])} chip locations")
-            
-            # cache on processor for reuse
-            self.processor.sensor_chip_slices = self.sensor_chip_slices
-            self.processor.sensor_burn_masks = self.sensor_burn_masks
-        else:
-            print("Reusing cached chip slices from previous run...")
-            self.sensor_chip_slices = self.processor.sensor_chip_slices
-            self.sensor_burn_masks = self.processor.sensor_burn_masks
-            
-        # for sensor_name, stack in self.processor.stacks.items():
-        #     print(f"Extracting burn-rich chip areas from {time_series_type} stack for {sensor_name}")
-
-        #     burn_mask = self.processor.burn_mask.rio.reproject_match(
-        #         stack[0][0],
-        #         resampling=rasterio.enums.Resampling.nearest
-        #         )
-        #     self.sensor_burn_masks[sensor_name] = burn_mask.compute()
-        #     self.sensor_chip_slices[sensor_name] = get_chip_slices(stack[0][0], burn_mask, self.processor.config)
-        #     print(f"  {sensor_name}: {len(self.sensor_chip_slices[sensor_name])} chip locations")
+                self.sensor_chip_slices[sensor_name] = get_chip_slices(stack[0][0], burn_mask, self.processor.config)
+                print(f"{sensor_name}: {len(self.sensor_chip_slices[sensor_name])} chip locations")
+                
+                self.processor.event_chip_slices[sensor_name] = self.sensor_chip_slices[sensor_name]
+        
+        end_time = time.perf_counter()
+        elapsed_time = end_time - start_time
+        print(f"Elapsed time for chip indexing: {elapsed_time:.8f} seconds")
 
         for sensor_name, stack in self.processor.stacks.items():
             results = self.gen_fire_chips(stack, sensor_name, self.processor.config)
             all_sensor_results[sensor_name] = results
         
-        # Group results by slice_idx
-        # Assumes each sensor returns results with slice_idx as last element
+        # Group results by slice_idx: Assumes each sensor returns results with slice_idx as last element
         slice_groups = {}
         for sensor_name, results in all_sensor_results.items():
             for result in results:
@@ -171,7 +163,6 @@ class ChipGenerator:
             
             all_ok = all(coverage.get(s, set()) >= required_quarters for s in required_sensors)
             
-            
             if time_series_type == "event" and not all_ok:
                 print(f"[skip] Event chip {chip_index:02d}: Missing quarters "
                     f"(have: {coverage})")
@@ -187,6 +178,6 @@ class ChipGenerator:
                             self.processor.config, footprint, sensor_name, status, ts
                         )
                 
-            self.processor.valid_event_chip_ids.add(chip_index)
+            self.processor.valid_event_chip_ids.add(chip_index)            
             
         return metadata_df.iloc[start_len:].copy()
