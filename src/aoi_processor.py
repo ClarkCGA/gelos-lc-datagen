@@ -4,7 +4,6 @@ import pystac
 import pandas as pd
 import numpy as np
 from datetime import datetime
-import time
 
 from .utils.search import search_s2_scenes, search_s1_scenes, search_landsat_scenes, search_annual_scene, count_unique_dates, get_landsat_wrs_path
 from .utils.stack import stack_data, stack_dem_data, stack_land_cover_data, pystac_itemcollection_to_gdf
@@ -180,3 +179,4 @@ class AOI_Processor:
             self.burn_mask = rasterize_aoi(self.aoi, self.stacks["sentinel_2"][0][0])
             chip_generator = ChipGenerator(self)
             return chip_generator.generate_time_series(time_series_type, metadata_df)
+

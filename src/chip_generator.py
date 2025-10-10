@@ -10,7 +10,9 @@ import rasterio
 import rioxarray 
 from shapely.geometry import Polygon, box, shape, mapping
 import geopandas as gpd
-import time
+import time as systime
+from pathlib import Path
+import json
 
 class ChipGenerator:
     def __init__(self, processor: "AOI_Processor"):
@@ -25,6 +27,7 @@ class ChipGenerator:
         resolution = abs(stack[0].rio.resolution()[0])
         sample_size = int(config.chips.sample_size / resolution)
         chip_size = int(config.chips.chip_size / resolution)
+
         chip_slices = self.sensor_chip_slices[sensor_name]
         
         if not chip_slices:
@@ -40,8 +43,13 @@ class ChipGenerator:
             for q_idx, q_stack in enumerate(stack):
                 status = None
                 try:
+                    # start_time = systime.perf_counter()
                     chip = q_stack.isel(y=slice(y0, y1), x=slice(x0, x1))
-                    chip = chip.compute()
+                    # chip = chip.compute()
+                    # end_time = systime.perf_counter()
+                    # elapsed_time = end_time - start_time
+                    # print(f"Elapsed time for computing chip {slice_idx} for {q_idx}: {int(elapsed_time//60)} min {elapsed_time%60:.2f} sec")
+
 
                     if "time" not in chip.dims:
                         chip = chip.expand_dims("time")
@@ -93,20 +101,36 @@ class ChipGenerator:
         required_sensors = getattr(required_sensors, "required_event_sensors", ["sentinel_2", "sentinel_1", "landsat"])
         required_quarters = {1, 2, 3, 4}
         
+        elapsed_time = {}
+        working_directory = Path(self.processor.config.directory.working) / self.processor.config.dataset.version
+        time_log_path = working_directory / 'logs/elapsed_time_log.json'
         for name, stack in self.processor.stacks.items():
-            print(f"Computing Stack for {name} sensor")
-            start_time = time.perf_counter()
             # self.processor.stacks[name] = stack.persist()
+            # print(stack)
+            start_time = systime.perf_counter()
             self.processor.stacks[name] = stack.compute()
-            end_time = time.perf_counter()
-            elapsed_time = end_time - start_time
-            print(f"Elapsed time: {elapsed_time:.8f} seconds")
+            end_time = systime.perf_counter()
+            duration = end_time - start_time
+            print(f"Elapsed time for computing for {name}: {int(duration//60)} min {duration%60:.2f} sec")
+            elapsed_time[name] = {
+                "elapsed_seconds": round(duration, 2),
+                "elapsed_minutes": round(duration / 60, 2)
+                }
+            
+        if time_log_path.exists():
+            with open(time_log_path, "r") as f:
+                log = json.load(f)
+        else:
+            log = {}
+        
+        if self.processor.aoi_index not in log:
+            log[self.processor.aoi_index] = {"runs": []}
+        log[self.processor.aoi_index]["runs"].append(elapsed_time)
 
+        with open(time_log_path, "w") as f:
+            json.dump(log, f, indent=4)
+        
         print(f"Generating event chips for AOI {self.processor.aoi_index}")
-        
-        print(f"Extracting Chip Indices")
-        start_time = time.perf_counter()
-        
         self.sensor_burn_masks = {}
         self.sensor_chip_slices = {}
         all_sensor_results = {}
@@ -118,8 +142,7 @@ class ChipGenerator:
             self.allowed_slice_ids = set(self.processor.valid_event_chip_ids)
             self.sensor_chip_slices = self.processor.event_chip_slices
             print(f"Generating control chips from {len(self.allowed_slice_ids)} event chip locations.")
-        
-        elif time_series_type == "event":
+        else:
             for sensor_name, stack in self.processor.stacks.items():
                 print(f"Extracting burn-rich chip areas from {time_series_type} stack for {sensor_name}")
                 self.burn_mask = rasterize_aoi(self.processor.aoi, stack[0][0])
@@ -133,13 +156,14 @@ class ChipGenerator:
                 
                 self.processor.event_chip_slices[sensor_name] = self.sensor_chip_slices[sensor_name]
         
-        end_time = time.perf_counter()
-        elapsed_time = end_time - start_time
-        print(f"Elapsed time for chip indexing: {elapsed_time:.8f} seconds")
-
         for sensor_name, stack in self.processor.stacks.items():
+            start_time = systime.perf_counter()
             results = self.gen_fire_chips(stack, sensor_name, self.processor.config)
             all_sensor_results[sensor_name] = results
+            end_time = systime.perf_counter()
+            elapsed_time = end_time - start_time
+            print(f"Elapsed time for generating {sensor_name} chips: {int(elapsed_time//60)} min {elapsed_time%60:.2f} sec")
+
         
         # Group results by slice_idx: Assumes each sensor returns results with slice_idx as last element
         slice_groups = {}
@@ -177,7 +201,9 @@ class ChipGenerator:
                             chip_index, time_series_type, metadata_df, epsg,
                             self.processor.config, footprint, sensor_name, status, ts
                         )
-                
+                        del chip
+            
             self.processor.valid_event_chip_ids.add(chip_index)            
             
+
         return metadata_df.iloc[start_len:].copy()

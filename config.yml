@@ -1,6 +1,6 @@
 # Configuration file for chip generation
 dataset:
-  version: "v0.20.5"
+  version: "v0.20.6.1"
   fire: True
 
 aoi:
@@ -13,8 +13,8 @@ directory:
   # output: "/home/benchuser/final_data"
   # working: "data/interim/data/"
   # output: "data/interim/data/test/final_data_v20_5/"
-  working: "data/v2.5.1/"
-  output: "data/v2.5.1/final_data/"
+  working: "data/v2.5.6.1/"
+  output: "data/v2.5.6.1/final_data/"
 
 log_errors: true
 
@@ -26,7 +26,7 @@ sentinel_2:
     - "2023-04-01/2023-06-30" # (Apr-May-Jun)
     - "2023-07-01/2023-09-30" # (Jul-Aug-Sep)
     - "2023-10-01/2023-12-31" # (Oct-Nov-Dec)
-  cloud_cover: 30  # Maximum allowed cloud cover percentage in scene
+  cloud_cover: 20  # Maximum allowed cloud cover percentage in scene
   nodata_pixel_percentage : 5 # Maximum missing data percentage in scene
   bands:
   - "B01"
@@ -67,7 +67,7 @@ landsat:
   delta_days: 91 # get the full season for landsat
   collection: "landsat-c2-l2"
   platforms: ["landsat-8", "landsat-9"]
-  cloud_cover: 30  # Maximum allowed cloud cover percentage in scene
+  cloud_cover: 20  # Maximum allowed cloud cover percentage in scene
   # landsat does not have a nodata pixel percentage property
   bands:
   - "coastal"    # Coastal/Aerosol (Band 1)
