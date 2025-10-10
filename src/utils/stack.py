@@ -59,13 +59,12 @@ def stack_data(
         xy_coords='center',
         **bounds_kwargs
     )
+    
     if platform in ['sentinel_2', 'landsat']:
         stack = mask_cloudy_pixels(stack, platform)
-        stack = stack.fillna(-999)
 
     if platform not in ['sentinel_2']:
         quarter_times = stack.time.groupby("time.quarter").first()
-        stack = stack.fillna(-999)
         stack = stack.groupby("time.quarter").first(skipna=True)
         stack['quarter'] = quarter_times.values
         stack = stack.rename({'quarter': 'time'})
@@ -74,6 +73,8 @@ def stack_data(
         raise ValueError(f"{platform} unexpected number of bands")
     if platform in ['sentinel_2', 'landsat']:
         stack = stack.drop_sel(band=cloud_band)
+    
+    stack = stack.fillna(-999)
     stack = stack.rio.write_nodata(-999)
     
     return stack
@@ -145,7 +146,7 @@ def mask_cloudy_pixels(stack, platform):
         stack = stack.where(clear_mask)
     elif platform == "sentinel_2":
         scl = stack.sel(band="SCL")
-        cloud_mask = scl.isin([3, 8, 9, 10])
+        cloud_mask = scl.isin([0, 1, 3, 8, 9, 10]) # invalid, saturated, cloud shadows, clouds, cirrus
         stack = stack.where(~cloud_mask)
     else:
         print(f"attempting to cloud mask invalid platform: {platform}")

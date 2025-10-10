@@ -131,21 +131,24 @@ def harmonize_to_old(data):
     new_harmonized -= offset
 
     new = xr.concat([new, new_harmonized], "band").sel(band=data.band.data.tolist())
-        
+    
     return xr.concat([old, new], dim="time")
 
 
-def meters_to_pixels(stack, meters):
-    """Convert a distance in meters to (px_x, px_y) using the stack's georesolution."""
-    rx, ry = stack.rio.resolution()
-    px_x = max(1, int(np.floor(meters / abs(rx))))
-    px_y = max(1, int(np.floor(meters / abs(ry))))
-    return px_x, px_y
+# def meters_to_pixels(stack, meters):
+#     """Convert a distance in meters to (px_x, px_y) using the stack's georesolution."""
+#     rx, ry = stack.rio.resolution()
+#     px_x = max(1, int(np.floor(meters / abs(rx))))
+#     px_y = max(1, int(np.floor(meters / abs(ry))))
+#     return px_x, px_y
 
 def get_chip_slices(stack, burn_mask, config):
     """Return [(chip_stack, (y0,y1,x0,x1))] for windows whose burn fraction >= threshold."""
-    chip_px_x, chip_px_y = meters_to_pixels(stack, config.chips.chip_size)
-    stride_px_x, stride_px_y = meters_to_pixels(stack, getattr(config.chips, "stride_m", config.chips.chip_size))
+    resolution = abs(stack[0].rio.resolution()[0])
+    sample_size = int(config.chips.sample_size / resolution)
+    chip_size = int(config.chips.chip_size / resolution)
+    chip_px_x, chip_px_y = chip_size, chip_size
+    stride_px_x, stride_px_y = sample_size, sample_size
 
     H, W = int(burn_mask.shape[0]), int(burn_mask.shape[1])
     chip_slices = []

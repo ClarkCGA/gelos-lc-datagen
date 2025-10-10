@@ -9,6 +9,7 @@ from dask.distributed import Client, LocalCluster
 import logging
 from pathlib import Path
 import shutil
+import time as systime
 
 from src.gelos_config import GELOSConfig
 from src.aoi_processor import AOI_Processor
@@ -96,6 +97,7 @@ class Downloader:
 
     def download(self):
         for aoi_index, aoi in self.aoi_processing_gdf.iterrows():
+            start_time = systime.perf_counter()
             event_date_ranges, control_date_ranges = get_fire_date_ranges(
                                                         aoi, 
                                                         n_control_years=getattr(
@@ -128,7 +130,7 @@ class Downloader:
             if not event_success:
                 print(f"[skip-controls] AOI {aoi_index:02d}: event failed or produced no chips.")
                 continue
-            for ctrl_dates in control_date_ranges:
+            for ctrl_dates in control_date_ranges: 
                 try:
                     print(f"Processing Control Chips for AOI {aoi_index:02d}")
                     aoi_chip_df = aoi_processor.process_aoi("control", ctrl_dates, self.chip_metadata_df)
@@ -144,3 +146,8 @@ class Downloader:
                         subset=["chip_index","platform","date"], keep="last", inplace=True
                     )
             self.chip_metadata_df.to_csv(self.chip_metadata_path, index=False)
+            end_time = systime.perf_counter()
+            elapsed_time = end_time - start_time
+            minutes = int(elapsed_time // 60)
+            seconds = elapsed_time % 60
+            print(f"Processing AOI {aoi_index} took: {minutes} minutes {seconds:.2f} seconds")

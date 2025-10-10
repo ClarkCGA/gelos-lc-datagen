@@ -83,7 +83,7 @@ def search_s1_scenes(aoi, center_datetime, overall_date_range, delta_days, catal
         intersects = aoi,
         query = [f'sat:relative_orbit={relative_orbit}'],
         datetime = datetime_range,
-        max_items = 50,
+        max_items = 10,
     )
     items = search.item_collection()
     if not items:
@@ -121,7 +121,7 @@ def search_landsat_scenes(aoi, center_datetime, overall_date_range, delta_days, 
         datetime = datetime_range,
         query = query,
         sortby = ["+properties.eo:cloud_cover"],
-        max_items = 50 
+        max_items = 10
     )
 
     items = search.item_collection()
