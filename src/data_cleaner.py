@@ -61,15 +61,19 @@ class DataCleaner:
         metadata_gdf['land_cover'] = metadata_gdf['land_cover'].map(lambda x: int(x))
         metadata_gdf['x_center'] = metadata_gdf.geometry.centroid.x
         metadata_gdf['y_center'] = metadata_gdf.geometry.centroid.y
-        metadata_gdf = metadata_gdf.rename(columns={"chip_index": "original_chip_id"})
+        metadata_gdf = metadata_gdf.rename(columns={
+            "chip_index": "original_chip_id",
+            "sentinel_2_dates": "S2L2A_dates",
+            "sentinel_1_dates": "S1RTC_dates",
+            "landsat_dates": "LC2L2_dates"
+        })
         metadata_gdf.index = metadata_gdf['chip_id']
-
         (self.output_dir / self.version).mkdir(exist_ok=True)
         metadata_gdf.to_file(self.output_dir / f'{self.version}/cleaned_df.geojson', driver='GeoJSON', index=False)
 
         for index, row in tqdm(metadata_gdf.iterrows(), total=len(metadata_gdf), desc="copying files to output dir..."):
-            for col in ["sentinel_2_dates", "sentinel_1_dates", "landsat_dates"]:
-                for i, date in enumerate(ast.literal_eval(row[col])):
+            for col in ["S2L2A_dates", "S1RTC_dates", "LC2L2_dates"]:
+                for i, date in enumerate(row[col].split(',')):
                     platform = col[:-6]
                     src_file = self.working_dir / self.version / f"{platform}_{row["original_chip_id"]:06}_{i}_{date}.tif"
                     dst_file = self.output_dir / self.version / f"{platform}_{row["chip_id"]:06}_{date}.tif"

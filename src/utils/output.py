@@ -16,35 +16,35 @@ def mask_nodata(band, nodata_values=(-999,)):
         band[band == val] = np.nan
     return band
 
-# def normalize(band):
-#     '''
-#     Normalize a band to 0-1 range(float)
-#     :param band (ndarray)
-#     return normalize band (ndarray); when max equals min, returns zeros.
-#     '''
-#     if np.nanmean(band) >= 4000:
-#         band = band / 6000
-#     elif np.max(band) < 1:
-#         band = band * 3
-#     else:
-#         band = band / 4000
-#     band = np.clip(band, None, 1)
+def scale(array: np.array):
+    """Scales a numpy array to 0-1 according to maximum value."""
+    if array.max() > 1.0:
+        array_scaled = array / 4000
+    else:
+        array_scaled = array * 5
 
-#     return band
-
-def normalize(array):
-    """Normalizes a numpy array to 0-1, stretching to 2nd and 98th percentiles."""
-    # Mask out invalid values (NaNs) for percentile calculation
-    valid_pixels = array[~np.isnan(array)]
-    if valid_pixels.size == 0:
-        return np.zeros_like(array) # Return an all-zero array if no valid data
-    p2, p98 = np.percentile(valid_pixels, (2, 98))
-    # Clip to prevent extreme values from dominating the image
-    array_norm = np.clip((array - p2) / (p98 - p2), 0, 1)
-    # Fill NaNs with 0 for visualization
-    return np.nan_to_num(array_norm)
+    array_norm = np.clip(array_scaled, 0, 1)
+    return array_norm
 
 
+def s1_norm(linear_data, band='VV'):
+    # Convert linear power to dB
+    db_data = 10 * np.log10(linear_data)
+
+    # Define fixed clipping ranges for VV and VH bands in dB
+    if band == 'VV':
+        min_db, max_db = -25, 0
+    elif band == 'VH':
+        min_db, max_db = -30, -5
+
+    # Clip dB values
+    clipped_db = np.clip(db_data, min_db, max_db)
+
+    # Scale clipped values to [0,1]
+    scaled_data = (clipped_db - min_db) / (max_db - min_db)
+
+    return scaled_data
+    
 def create_s1_rgb_composite(s1_array: xr.DataArray):
     """
     Creates an RGB image from a Sentinel-1 xarray.DataArray.
@@ -61,18 +61,17 @@ def create_s1_rgb_composite(s1_array: xr.DataArray):
     vh = s1_array.isel(band=1).values.astype(float)
 
     # Normalize each polarization to enhance contrast
-    vv_norm = normalize(vv)
-    vh_norm = normalize(vh)
+    vv_norm = s1_norm(vv, 'VV')
+    vh_norm = s1_norm(vh, 'VH')
 
     # Calculate the ratio for the blue channel. Add epsilon to avoid division by zero.
-    ratio = vv / (vh + 1e-6)
-    ratio_norm = normalize(ratio)
+    ratio = vv_norm / (vh_norm + 1e-6)
 
     # Stack bands into an RGB image
     # R: VV -> Red indicates strong surface scattering (rough surfaces)
     # G: VH -> Green indicates strong volume scattering (vegetation, buildings)
     # B: Ratio -> Blue indicates low volume scattering (water, roads)
-    rgb = np.dstack((vv_norm, vh_norm, ratio_norm))
+    rgb = np.dstack((vv_norm, vh_norm, ratio))
     
     # Convert to 8-bit integer for image display
     rgb_8bit = (rgb * 255).astype(np.uint8)
@@ -100,9 +99,9 @@ def save_thumbnails(array, root_path, index):
             red   = array.isel(time = i,band=3).values.astype(float)
     
             # mask and normalize
-            blue = normalize(mask_nodata(blue))
-            green = normalize(mask_nodata(green))
-            red   = normalize(mask_nodata(red))
+            blue = scale(blue)
+            green = scale(green)
+            red   = scale(red)
 
             # stack and convert to 8-bit
             rgb = np.dstack((red, green, blue))
@@ -119,5 +118,6 @@ def save_multitemporal_chips(array, root_path, index):
         dest_path = f"{root_path}/{array.name}_{index:06}_{i}_{ts.strftime('%Y%m%d')}.tif"
         array.sel(time = dt).squeeze().rio.to_raster(dest_path)
         dts.append(ts.strftime('%Y%m%d'))
+    dts = ','.join(dts)
     return dts
 

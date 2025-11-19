@@ -1,6 +1,6 @@
 # Configuration file for chip generation
 dataset:
-  version: "v0.40.9"
+  version: "v0.50.0"
 
 aoi:
   version: "v0.30"
@@ -21,7 +21,7 @@ sentinel_2:
     - "2023-04-01/2023-06-30" # (Apr-May-Jun)
     - "2023-07-01/2023-09-30" # (Jul-Aug-Sep)
     - "2023-10-01/2023-12-31" # (Oct-Nov-Dec)
-  cloud_cover: 50  # Maximum allowed cloud cover percentage in scene
+  cloud_cover: 30  # Maximum allowed cloud cover percentage in scene
   nodata_pixel_percentage : 5 # Maximum missing data percentage in scene
   bands:
   - "B01"
@@ -57,12 +57,12 @@ sentinel_1:
   na_value: -999 
   dtype: "float32"
 
-# Landsat-8 (L8) settings
+# Landsat-8 (L8) and Landsat-9 (L9) settings
 landsat:
   delta_days: 91 # get the full season for landsat
   collection: "landsat-c2-l2"
   platforms: ["landsat-8", "landsat-9"]
-  cloud_cover: 100  # Maximum allowed cloud cover percentage in scene
+  cloud_cover: 50  # Maximum allowed cloud cover percentage in scene
   # landsat does not have a nodata pixel percentage property
   bands:
   - "coastal"    # Coastal/Aerosol (Band 1)

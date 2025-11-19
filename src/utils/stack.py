@@ -3,6 +3,7 @@ import numpy as np
 import xarray as xr
 import geopandas as gpd
 from shapely.geometry import shape
+import pdb
 
 def pystac_itemcollection_to_gdf(item_collection):
     geometries = []
@@ -138,8 +139,8 @@ def mask_cloudy_pixels(stack, platform):
         stack = stack.where(clear_mask)
     elif platform == "sentinel_2":
         scl = stack.sel(band="SCL")
-        cloud_mask = scl.isin([3, 8, 9, 10])
-        stack = stack.where(~cloud_mask)
+        clear_mask = scl.isin([2, 4, 5, 6, 11])
+        stack = stack.where(clear_mask)
     else:
         print(f"attempting to cloud mask invalid platform: {platform}")
         return None

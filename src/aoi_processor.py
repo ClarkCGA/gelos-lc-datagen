@@ -60,8 +60,6 @@ class AOI_Processor:
         s1_items = pystac.item_collection.ItemCollection([])
         landsat_items = pystac.item_collection.ItemCollection([])
         
-        
-
         for s2_item, date_range in zip(s2_items, self.config.sentinel_2.time_ranges):
             center_datetime = s2_item.datetime
             print(f"searching sentinel_1 and landsat scenes close to {center_datetime} within {date_range}")
@@ -135,11 +133,15 @@ class AOI_Processor:
         bbox_gdf['datetime'] = pd.to_datetime(bbox_gdf['datetime'], format="mixed")
         bbox_gdf['date'] = bbox_gdf['datetime'].dt.date
         combined_geoms = bbox_gdf.groupby(['collection', 'date'])['geometry'].apply(lambda x: x.unary_union)
-        
+
         # get the intersection of all data sources as the bounding box for stacks
         overlap = reduce(lambda x, y: x.intersection(y), combined_geoms)
         self.overlap_bounds = overlap.bounds
-
+        
+        self.scene_ids = {
+            f"{platform}_scene_ids": ','.join([item.id for item in items]) for platform, items in self.itemcollections.items()
+        }
+        
         print("stacking landsat data...")
         self.stacks['landsat'] = stack_data(
             landsat_items,
@@ -203,8 +205,8 @@ class AOI_Processor:
         )
 
         chip_generator = ChipGenerator(self)
-        chip_df = chip_generator.generate_from_aoi()
-        return chip_df
+        chip_gdf = chip_generator.generate_from_aoi()
+        return chip_gdf
         
 
 

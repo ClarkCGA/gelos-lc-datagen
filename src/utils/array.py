@@ -1,6 +1,7 @@
 import numpy as np
 from shapely.geometry import Polygon, box
 import geopandas as gpd
+import pdb
     
 def process_array( 
             stack, 
@@ -10,9 +11,9 @@ def process_array(
             chip_size: int,
             sample_size: int,
             resolution: int,
-            fill_na: bool = True,
+            fill_na: bool = False,
             na_value: int = -999,
-            dtype = str,
+            dtype = float,
             ):
 
     x, y = coords
@@ -67,11 +68,14 @@ def missing_values(array, chip_size, sample_size):
     array_trimmed = array.isel(x = slice(int((chip_size - sample_size) / 2), int((chip_size + sample_size) / 2)), 
                                y = slice(int((chip_size - sample_size) / 2), int((chip_size + sample_size) / 2))
                               )
-    has_nan = array_trimmed.isnull().any()
-    all_zero_row = (array_trimmed == 0).all(dim='y').any()
-    all_zero_col = (array_trimmed == 0).all(dim='x').any()
-    missing_values = has_nan or all_zero_row or all_zero_col
-    return missing_values
- 
+    has_nan = array_trimmed.isnull().any().item()
+    
+    # Calculate the number of zero pixels and the total number of pixels
+    zero_pixels = (array_trimmed == 0).sum().item()
+    above_zero_threshold = zero_pixels > 0
+    
+    missing_values = has_nan or above_zero_threshold
+    return missing_values 
+
 def unique_class(window, axis=None, **kwargs):
     return np.all(window == window[0, 0], axis=axis)
