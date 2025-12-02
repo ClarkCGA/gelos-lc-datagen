@@ -16,3 +16,4 @@ dependencies:
   - tifffile=2024.9.20
   - localtileserver
   - jupyter-server-proxy
+  - s3fs

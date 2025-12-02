@@ -23,7 +23,7 @@ def filter_by_n_dates(row, modality, required_dates=4):
     # helper function to check number of dates for a modality
     return required_dates == len(row[f'{modality}_dates'].split(','))
 
-def gen_thumbnail_urls(row, image, s3_prefix="https://gelos-fm.s3.amazonaws.com/thumbnails"):
+def gen_thumbnail_urls(row, image, s3_prefix="https://gelos-fm.s3.amazonaws.com/data"):
     """
     Generate S3 urls for thumbnails
     :param row: dictionary with id and dates
@@ -41,12 +41,12 @@ def gen_thumbnail_urls(row, image, s3_prefix="https://gelos-fm.s3.amazonaws.com/
     return ','.join(url_list)
 # Color dictionaries
 color_dict = {
-    '1': '#2c41e6',   # Water
-    '2': '#04541b',   # Trees
-    '5': '#99e0ad',   # Crops
-    '7': '#797b85',   # Built area
-    '8': '#a68647',   # Bare ground
-    '11': '#f7980a',  # Rangeland
+    '1': '#419bdf',   # Water
+    '2': '#397d49',   # Trees
+    '5': '#e49635',   # Crops
+    '7': '#c4281b',   # Built area
+    '8': '#a59b8f',   # Bare ground
+    '11': '#e3e2c3',  # Rangeland
 }
 land_cover = {
     '1': 'Water',
