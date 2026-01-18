@@ -23,7 +23,7 @@ def filter_by_n_dates(row, modality, required_dates=4):
     # helper function to check number of dates for a modality
     return required_dates == len(row[f'{modality}_dates'].split(','))
 
-def gen_thumbnail_urls(row, image, s3_prefix="https://gelos-fm.s3.amazonaws.com/data"):
+def gen_thumbnail_urls(row, image, s3_prefix="https://gelos-fm.s3.amazonaws.com/thumbnails"):
     """
     Generate S3 urls for thumbnails
     :param row: dictionary with id and dates
@@ -104,8 +104,8 @@ class DataCleaner:
             
         # create metadata columns
         metadata_gdf['id'] = np.arange(0, len(metadata_gdf))
-        metadata_gdf['lat'] = metadata_gdf.geometry.centroid.x
-        metadata_gdf['lon'] = metadata_gdf.geometry.centroid.y
+        metadata_gdf['lat'] = metadata_gdf.geometry.centroid.y
+        metadata_gdf['lon'] = metadata_gdf.geometry.centroid.x
         metadata_gdf = metadata_gdf.rename(columns={"chip_index": "original_id"})
         metadata_gdf.index = metadata_gdf['id']
         metadata_gdf['land_cover'] = metadata_gdf['land_cover'].astype(int).astype(str)
