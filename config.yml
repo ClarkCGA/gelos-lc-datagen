@@ -1,15 +1,15 @@
 # Configuration file for chip generation
 dataset:
-  version: "v0.50.0"
+  version: "v0.50.1"
 
 aoi:
-  version: "v0.30"
+  version: "v0.40"
   include_indices:
   exclude_indices:
 
 directory:
-  working: "/home/benchuser/data"
-  output: "/home/benchuser/final_data"
+  working: "/app/data/interim"
+  output: "/app/data/processed"
 
 log_errors: true
 

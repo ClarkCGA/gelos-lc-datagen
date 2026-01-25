@@ -4,20 +4,13 @@ COPY environment.yml .
 RUN conda env create -f environment.yml
 
 # Activate the Conda environment
-RUN echo "conda activate gfm_bench" >> ~/.bashrc
-ENV PATH="$PATH:/opt/conda/envs/gfm_bench/bin"
+RUN echo "conda activate gelos-lc-datagen" >> ~/.bashrc
+ENV PATH="$PATH:/opt/conda/envs/gelos-lc-datagen/bin"
 ENV LOCALTILESERVER_CLIENT_PREFIX='proxy/{port}'
 
-# Create a non-root user and switch to that user
-RUN useradd -m benchuser
-RUN mkdir -p /home/benchuser/.local && chown -R benchuser:benchuser /home/benchuser
-USER benchuser
-
-WORKDIR /home/benchuser
+WORKDIR /app
 
 # Expose ports
 EXPOSE 8888
 EXPOSE 8787
 
-# Start JupyterLab
-CMD ["jupyter", "lab", "--ip=0.0.0.0"]

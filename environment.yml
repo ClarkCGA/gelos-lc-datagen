@@ -1,4 +1,4 @@
-name: gfm_bench
+name: gelos-lc-datagen 
 channels:
   - conda-forge
 dependencies:

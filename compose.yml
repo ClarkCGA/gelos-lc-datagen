@@ -1,14 +1,21 @@
 services:
   notebook:
-    image: gfm-bench:latest
+    image: gelos-lc-datagen:latest
     build: .
+    user: root 
     environment:
-      - PYTHONPATH=/home/benchuser/code
+      PYTHONPATH: /app/code
+      NB_UID: "${UID:-1000}"
+      NB_GID: "${GID:-100}"
+      GRANT_SUDO: yes
     ports:
-      - "8088:8888"
-      - "8087:8787"
+      - "${JUPYTER_HOST_PORT}:8888"
+      - "${DASK_HOST_PORT}:8787"
     volumes:
-      - /workspace/Denys/gfm-bench:/home/benchuser/code/
-      - /workspace/_output/gfm-bench-data:/home/benchuser/data/
-      - /workspace/_output/gfm-explainability/data/input:/home/benchuser/final_data/
+      - ./:/app/code/
+      - "${EXTERNAL_PATH}:/app/data/external/"
+      - "${RAW_PATH}:/app/data/raw/"
+      - "${INTERIM_PATH}:/app/data/interim/"
+      - "${PROCESSED_PATH}:/app/data/processed/"
     shm_size: '2gb'
+    command: bash -lc "jupyter lab --ip=0.0.0.0 ${JUPYTERLAB_ARGS:-}"

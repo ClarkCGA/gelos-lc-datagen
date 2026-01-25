@@ -47,7 +47,7 @@ class Downloader:
 
         # handle the case where the script is starting a new download operation
         else:
-            aoi_path = (f'/home/benchuser/code/data/map_{self.config.aoi.version}.geojson')
+            aoi_path = (f'/app/code/data/map_{self.config.aoi.version}.geojson')
             self.aoi_gdf = gpd.read_file(aoi_path)
             if self.config.aoi.exclude_indices:
                 self.aoi_gdf = self.aoi_gdf.drop(self.config.aoi.exclude_indices)
