@@ -13,33 +13,18 @@ from src.gelos_config import GELOSConfig
 s3 = s3fs.S3FileSystem(anon=True)
 
 # TODO: Make this part of the data generation logic - construct filepaths
-def _process_metadata_df(self) -> gpd.GeoDataFrame:
 
-    # for each modality, construct file paths
-    def _construct_file_paths(row, modality: str, data_root: Path) -> List[Path]:
-        modality = self.modality_rename_dict.get(modality, modality)
-        date_list = row[f"{modality}_dates"].split(",")
-        id = row["id"]
-        path_list = [data_root / f"{modality}_{id:06}_{date}.tif" for date in date_list]
-        return path_list
+def _construct_file_paths(row, modality: str, data_root: Path) -> str:
+    date_list = row[f"{modality}_dates"].split(",")
+    id = row["id"]
+    path_list = [f"{modality}_{id:06}_{date}.tif" for date in date_list]
+    comma_separated_path_list=(',').join(path_list)
+    return comma_separated_path_list
 
-    def _construct_DEM_path(row, data_root: Path) -> List[Path]:
-        id = row["id"]
-        DEM_list = [data_root / f"dem_{id:06}.tif"]
-        return DEM_list
-
-    for modality in self.bands.keys():
-
-        if modality == "DEM":
-            self.gdf["DEM_paths"] = self.gdf.apply(
-                _construct_DEM_path, data_root=self.data_root, axis=1
-            )
-            continue
-
-        self.gdf[f"{modality}_paths"] = self.gdf.apply(
-            _construct_file_paths, modality=modality, data_root=self.data_root, axis=1
-        )
-    return self.gdf
+def _construct_DEM_path(row, data_root: Path) -> str:
+    id = row["id"]
+    DEM_list = f"dem_{id:06}.tif"
+    return DEM_list
 
 def drop_rows(metadata_df, land_cover_class, count_to_drop):
     import random
@@ -144,6 +129,18 @@ class DataCleaner:
         for image in ["landsat", "sentinel_1", "sentinel_2"]:
             metadata_gdf[f"{image}_thumbs"] = metadata_gdf.apply(
                 gen_thumbnail_urls, axis=1, image=image
+            )
+            
+        for modality in ["landsat", "sentinel_1", "sentinel_2", "dem"]:
+
+            if modality == "dem":
+                metadata_gdf["dem_paths"] = metadata_gdf.apply(
+                    _construct_DEM_path, axis=1
+                )
+                continue
+
+            metadata_gdf[f"{modality}_paths"] = metadata_gdf.apply(
+                _construct_file_paths, modality=modality, axis=1
             )
 
         (self.output_dir / self.version).mkdir(exist_ok=True)
