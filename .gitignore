@@ -2,3 +2,4 @@
 **.ipynb_checkpoints
 **.Trash*/
 *.env
+*.agent-module/
