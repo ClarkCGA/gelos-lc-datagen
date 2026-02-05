@@ -14,21 +14,21 @@ s3 = s3fs.S3FileSystem(anon=True)
 
 # TODO: Make this part of the data generation logic - construct filepaths
 
-def _construct_file_paths(row, modality: str, data_root: Path) -> str:
+def _construct_file_paths(row, modality: str) -> str:
     date_list = row[f"{modality}_dates"].split(",")
     id = row["id"]
     path_list = [f"{modality}_{id:06}_{date}.tif" for date in date_list]
     comma_separated_path_list=(',').join(path_list)
     return comma_separated_path_list
 
-def _construct_DEM_path(row, data_root: Path) -> str:
+def _construct_dem_path(row) -> str:
     id = row["id"]
-    DEM_list = f"dem_{id:06}.tif"
-    return DEM_list
+    dem_list = f"dem_{id:06}.tif"
+    return dem_list
 
-def drop_rows(metadata_df, land_cover_class, count_to_drop):
+def drop_rows(metadata_df, lulc_class, count_to_drop):
     import random
-    index_to_drop = random.sample(sorted(metadata_df[metadata_df.land_cover==land_cover_class].index.values), count_to_drop)
+    index_to_drop = random.sample(sorted(metadata_df[metadata_df.lulc==lulc_class].index.values), count_to_drop)
     metadata_df = metadata_df.drop(index_to_drop)
 
     return metadata_df
@@ -42,7 +42,7 @@ def gen_thumbnail_urls(row, image, s3_prefix="https://gelos-fm.s3.amazonaws.com/
     Generate S3 urls for thumbnails
     :param row: dictionary with id and dates
     :param s3_prefix: S3 url prefix 
-    :param image: str, e.g., "landsat"
+    :param image: str, e.g., "lc2l2"
     :return urls: a list of urls
     """
     dates = row[f"{image}_dates"]
@@ -62,7 +62,7 @@ color_dict = {
     '8': '#a59b8f',   # Bare ground
     '11': '#e3e2c3',  # Rangeland
 }
-land_cover = {
+lulc = {
     '1': 'Water',
     '2': 'Trees',
     '5': 'Crops',
@@ -83,20 +83,20 @@ class DataCleaner:
         metadata_gdf = gpd.GeoDataFrame(metadata_df, geometry = 'chip_footprint', crs=4326)
         metadata_gdf = metadata_gdf[metadata_gdf['status'] == 'success']
 
-        # ensure only desired land_cover classes are present
-        metadata_gdf = metadata_gdf[metadata_gdf['land_cover'].isin([1, 2, 5, 7, 8, 11])]
+        # ensure only desired lulc classes are present
+        metadata_gdf = metadata_gdf[metadata_gdf['lulc'].isin([1, 2, 5, 7, 8, 11])]
         
         # filter rows where there are insufficient samples
-        for modality in ['sentinel_1', 'sentinel_2', 'landsat']:
+        for modality in ['s1rtc', 's2l2a', 'lc2l2']:
             metadata_gdf = metadata_gdf[
                 metadata_gdf.apply(lambda row: filter_by_n_dates(row, modality, required_dates=4), axis=1)
             ]
         
         # get sampling factor, max count, and min count
-        sampling_factor = self.config.land_cover.sampling_factor
+        sampling_factor = self.config.lulc.sampling_factor
         if sampling_factor:
-            max_count = metadata_gdf.groupby("land_cover").count().max().iloc[0]
-            min_count = metadata_gdf.groupby("land_cover").count().min().iloc[0]
+            max_count = metadata_gdf.groupby("lulc").count().max().iloc[0]
+            min_count = metadata_gdf.groupby("lulc").count().min().iloc[0]
             
             # use sampling factor to calculate correction factor, for proportional class drop quantities
             max_distance = max_count - min_count
@@ -109,12 +109,12 @@ class DataCleaner:
             # this scales the number of samples between min and min * sampling factor
             if max_distance_to_max_end_value > 0:
                     
-                for index, row in metadata_gdf.groupby("land_cover").count().iterrows():
-                    land_cover_class = index
+                for index, row in metadata_gdf.groupby("lulc").count().iterrows():
+                    lulc_class = index
                     class_count = row['chip_index']
                     class_distance = class_count - min_count
                     drop_quantity = int(correction_factor * class_distance)
-                    metadata_gdf = drop_rows(metadata_gdf, land_cover_class, drop_quantity)
+                    metadata_gdf = drop_rows(metadata_gdf, lulc_class, drop_quantity)
             
         # create metadata columns
         metadata_gdf['id'] = np.arange(0, len(metadata_gdf))
@@ -122,20 +122,20 @@ class DataCleaner:
         metadata_gdf['lon'] = metadata_gdf.geometry.centroid.x
         metadata_gdf = metadata_gdf.rename(columns={"chip_index": "original_id"})
         metadata_gdf.index = metadata_gdf['id']
-        metadata_gdf['land_cover'] = metadata_gdf['land_cover'].astype(int).astype(str)
-        metadata_gdf['category'] = metadata_gdf['land_cover'].map(land_cover)
-        metadata_gdf['color'] = metadata_gdf['land_cover'].map(color_dict)
+        metadata_gdf['lulc'] = metadata_gdf['lulc'].astype(int).astype(str)
+        metadata_gdf['category'] = metadata_gdf['lulc'].map(lulc)
+        metadata_gdf['color'] = metadata_gdf['lulc'].map(color_dict)
 
-        for image in ["landsat", "sentinel_1", "sentinel_2"]:
+        for image in ["lc2l2", "s1rtc", "s2l2a"]:
             metadata_gdf[f"{image}_thumbs"] = metadata_gdf.apply(
                 gen_thumbnail_urls, axis=1, image=image
             )
             
-        for modality in ["landsat", "sentinel_1", "sentinel_2", "dem"]:
+        for modality in ["lc2l2", "s1rtc", "s2l2a", "dem"]:
 
             if modality == "dem":
                 metadata_gdf["dem_paths"] = metadata_gdf.apply(
-                    _construct_DEM_path, axis=1
+                    _construct_dem_path, axis=1
                 )
                 continue
 
@@ -150,7 +150,7 @@ class DataCleaner:
 
         # move files to destination folder
         for index, row in tqdm(metadata_gdf.iterrows(), total=len(metadata_gdf), desc="copying files to output dir..."):
-            for col in ["sentinel_2_dates", "sentinel_1_dates", "landsat_dates"]:
+            for col in ["s2l2a_dates", "s1rtc_dates", "lc2l2_dates"]:
                 for i, date in enumerate(row[col].split(',')):
                     platform = col[:-6]
                     src_file = self.working_dir / self.version / f"{platform}_{row["original_id"]:06}_{i}_{date}.tif"
@@ -164,12 +164,13 @@ class DataCleaner:
             shutil.copy2(src_file, dst_file)
         
         # zip folder
-        folder_to_zip = self.working_dir / self.version
-        output_zip_file = self.output_dir / self.version / self.version
-        shutil.make_archive(output_zip_file, 'zip', folder_to_zip)
+        if config.directory.zip_output:
+            folder_to_zip = self.working_dir / self.version
+            output_zip_file = self.output_dir / self.version / self.version
+            shutil.make_archive(output_zip_file, 'zip', folder_to_zip)
 
 def main():
-    config = GELOSConfig.from_yaml('/home/benchuser/code/config.yml')
+    config = GELOSConfig.from_yaml('/app/code/config.yml')
     cleaner = DataCleaner(config)
     cleaner.clean()
 

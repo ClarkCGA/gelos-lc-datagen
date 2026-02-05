@@ -1,7 +1,7 @@
 # Product Requirements Document (PRD)
 
 ## 1. Executive Summary
-The GELOS land-cover generator produces multi-sensor satellite chip datasets for generating embeddings using the core GELOS repository. A containerized Python pipeline ingests AOIs, queries Microsoft Planetary Computer STAC for Sentinel-2/1, Landsat, DEM, and LULC products, stacks imagery, extracts chips with homogenous land cover, and packages metadata and thumbnails. 
+The GELOS land-cover generator produces multi-sensor satellite chip datasets for generating embeddings using the core GELOS repository. A containerized Python pipeline ingests AOIs, queries Microsoft Planetary Computer STAC for Sentinel-2/1, lc2l2, dem, and lulc products, stacks imagery, extracts chips with homogenous land cover, and packages metadata and thumbnails. 
 
 The core value proposition is a reproducible, scalable pipeline that yields balanced, geo-diverse chips with consistent metadata and ready-to-train rasters. The MVP delivers an automated end-to-end run (download → chip generation → cleaning → packaged release) for the LC track using provided configs.
 
@@ -31,7 +31,7 @@ Key needs/pain points:
 **In Scope (MVP)**
 - ✅ Run pipeline via `main.py` using `config.yml` to generate LC dataset version (v0.50.1 default).
 - ✅ AOI ingestion from versioned GeoJSON; include/exclude index filtering.
-- ✅ STAC search against MPC for S2/S1/Landsat/DEM/LC with cloud/nodata thresholds and date windows.
+- ✅ STAC search against MPC for S2/S1/lc2l2/dem/LC with cloud/nodata thresholds and date windows.
 - ✅ Stacking, homogeneity checks, chip extraction, rasters + thumbnails per modality.
 - ✅ Metadata capture (scene IDs, footprints, epsg, status) to CSV/GeoJSON; resumable runs.
 - ✅ Data cleaning: class filtering/balancing, URL enrichment, asset renaming/copying, zipping release.
@@ -53,7 +53,7 @@ Key needs/pain points:
 - Directory structure: `data/` (AOIs), `src/` (pipeline modules), `notebooks/` (exploration), `docs/` (PRD), `config.yml` (run settings).
 
 ## 6. Tools/Features (Pipeline Breakdown)
-- Downloader: STAC search for S2/S1/Landsat/DEM/LC with per-platform constraints; persists AOI status and chip metadata.
+- Downloader: STAC search for S2/S1/lc2l2/dem/LC with per-platform constraints; persists AOI status and chip metadata.
 - AOI Processor: computes overlap bbox, enforces min scenes (4 dates each), determines EPSG/MGRS/orbit/WRS path, stacks data.
 - Chip Generator: homogeneity check on land-cover window; per-chip raster export and thumbnails; records footprints/status.
 - Data Cleaner: filters invalid classes, ensures 4 dates per modality, optional sampling_factor balancing, enriches metadata (ids, lat/lon, category/color, thumbnail URLs), copies/renames assets to processed dir, zips release.

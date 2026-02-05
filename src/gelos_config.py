@@ -20,7 +20,7 @@ class PlatformConfig:
 
 
 @dataclass
-class Sentinel2Config(PlatformConfig):
+class S2L2AConfig(PlatformConfig):
     time_ranges: List[str]
     nodata_pixel_percentage: int
     cloud_cover: int
@@ -28,13 +28,13 @@ class Sentinel2Config(PlatformConfig):
     bands: List[str]
 
 @dataclass
-class Sentinel1Config(PlatformConfig):
+class S1RTCConfig(PlatformConfig):
     nodata_pixel_percentage: int
     delta_days: int
     bands: List[str]
 
 @dataclass
-class LandsatConfig(PlatformConfig):
+class LC2L2Config(PlatformConfig):
     platforms: List[str]
     cloud_cover: int
     cloud_band: str
@@ -42,11 +42,11 @@ class LandsatConfig(PlatformConfig):
     bands: List[str]
 
 @dataclass
-class DemConfig(PlatformConfig):
+class DEMConfig(PlatformConfig):
     year: str
 
 @dataclass
-class LandCoverConfig(PlatformConfig):
+class LULCConfig(PlatformConfig):
     year: str
     sampling_factor: Optional[int] = None
 
@@ -69,6 +69,7 @@ class AoiConfig:
 class DirectoryConfig:
     working: str
     output: str
+    zip_output: bool
 
 @dataclass
 class GELOSConfig:
@@ -77,11 +78,11 @@ class GELOSConfig:
     aoi: AoiConfig
     directory: DirectoryConfig
     log_errors: bool
-    sentinel_2: Sentinel2Config
-    sentinel_1: Sentinel1Config
-    landsat: LandsatConfig
-    dem: DemConfig
-    land_cover: LandCoverConfig
+    s2l2a: S2L2AConfig
+    s1rtc: S1RTCConfig
+    lc2l2: LC2L2Config
+    dem: DEMConfig
+    lulc: LULCConfig
     chips: ChipConfig
 
     @classmethod
@@ -95,10 +96,10 @@ class GELOSConfig:
             aoi=AoiConfig(**config_dict['aoi']),
             directory=DirectoryConfig(**config_dict['directory']),
             log_errors=config_dict['log_errors'],
-            sentinel_2=Sentinel2Config(**config_dict['sentinel_2']),
-            sentinel_1=Sentinel1Config(**config_dict['sentinel_1']),
-            landsat=LandsatConfig(**config_dict['landsat']),
-            dem=DemConfig(**config_dict.get('dem', {})),
-            land_cover=LandCoverConfig(**config_dict.get('land_cover', {})),
+            s2l2a=S2L2AConfig(**config_dict['s2l2a']),
+            s1rtc=S1RTCConfig(**config_dict['s1rtc']),
+            lc2l2=LC2L2Config(**config_dict['lc2l2']),
+            dem=DEMConfig(**config_dict.get('dem', {})),
+            lulc=LULCConfig(**config_dict.get('lulc', {})),
             chips=ChipConfig(**config_dict['chips'])
         )

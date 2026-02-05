@@ -6,24 +6,24 @@ import pystac
 import geopandas as gpd
 from shapely.geometry import shape
 
-landsat_wrs_path = '/home/benchuser/data/WRS2_descending_0.zip'
-landsat_wrs_url = 'https://d9-wret.s3.us-west-2.amazonaws.com/assets/palladium/production/s3fs-public/atoms/files/WRS2_descending_0.zip'
+lc2l2_wrs_path = '/home/benchuser/data/WRs2l2a_descending_0.zip'
+lc2l2_wrs_url = 'https://d9-wret.s3.us-west-2.amazonaws.com/assets/palladium/production/s3fs-public/atoms/files/WRs2l2a_descending_0.zip'
 
 try:
-    landsat_wrs_gdf = gpd.read_file(landsat_wrs_path).to_crs(3857)
+    lc2l2_wrs_gdf = gpd.read_file(lc2l2_wrs_path).to_crs(3857)
 except:
-    landsat_wrs_gdf = gpd.read_file(landsat_wrs_url).to_crs(3857)
+    lc2l2_wrs_gdf = gpd.read_file(lc2l2_wrs_url).to_crs(3857)
  
-def get_landsat_wrs_path(aoi):
+def get_lc2l2_wrs_path(aoi):
     aoi = gpd.GeoSeries([shape(aoi)], crs=4326).to_crs(3857)
-    intersecting_gdf = landsat_wrs_gdf[landsat_wrs_gdf.intersects(aoi.iloc[0])].copy()
+    intersecting_gdf = lc2l2_wrs_gdf[lc2l2_wrs_gdf.intersects(aoi.iloc[0])].copy()
     intersecting_gdf['intersection_area'] = intersecting_gdf.geometry.intersection(aoi.iloc[0]).area
     sorted_gdf = intersecting_gdf.sort_values(by='intersection_area', ascending=False)
     best_footprint = sorted_gdf.iloc[0]
 
     return int(best_footprint['PATH'])
     
-def search_s2_scenes(aoi, overall_date_range, catalog, collection, nodata_pixel_percentage, cloud_cover, s2_mgrs_tile):
+def search_s2l2a_scenes(aoi, overall_date_range, catalog, collection, nodata_pixel_percentage, cloud_cover, s2l2a_mgrs_tile):
     """
     Searches for Sentinel-2 scenes within the AOI and date range.
     When passed a Sentinel-2 scene ID, will only return chips matching this scene ID
@@ -32,8 +32,8 @@ def search_s2_scenes(aoi, overall_date_range, catalog, collection, nodata_pixel_
         f"s2:nodata_pixel_percentage<{nodata_pixel_percentage}",
         f"eo:cloud_cover<{cloud_cover}"
     ]
-    if s2_mgrs_tile:
-        query.append(f"s2:mgrs_tile={s2_mgrs_tile}")
+    if s2l2a_mgrs_tile:
+        query.append(f"s2:mgrs_tile={s2l2a_mgrs_tile}")
     search = catalog.search(
         collections=collection,
         intersects = aoi,
@@ -45,11 +45,11 @@ def search_s2_scenes(aoi, overall_date_range, catalog, collection, nodata_pixel_
 
     items = search.item_collection()
     if not items:
-        return items, s2_mgrs_tile
-    s2_mgrs_tile = items[0].properties['s2:mgrs_tile']
-    return items, s2_mgrs_tile
+        return items, s2l2a_mgrs_tile
+    s2l2a_mgrs_tile = items[0].properties['s2:mgrs_tile']
+    return items, s2l2a_mgrs_tile
 
-def search_s1_scenes(aoi, center_datetime, overall_date_range, delta_days, catalog, collection, relative_orbit):
+def search_s1rtc_scenes(aoi, center_datetime, overall_date_range, delta_days, catalog, collection, relative_orbit):
     """
     Searches for Sentinel-1 scenes within the AOI that are closest to the specified datetime.
     """
@@ -95,9 +95,9 @@ def search_s1_scenes(aoi, center_datetime, overall_date_range, delta_days, catal
  
  
  
-def search_landsat_scenes(aoi, center_datetime, overall_date_range, delta_days, catalog, collection, platforms, cloud_cover, landsat_wrs_path):
+def search_lc2l2_scenes(aoi, center_datetime, overall_date_range, delta_days, catalog, collection, platforms, cloud_cover, lc2l2_wrs_path):
     """
-    Searches for Landsat scenes within the AOI. Finds the least cloudy scene
+    Searches for lc2l2 scenes within the AOI. Finds the least cloudy scene
     and returns all scenes from that same date for compositing.
     """
     datetime_range = get_clipped_datetime_range(center_datetime, overall_date_range, delta_days)
@@ -105,8 +105,8 @@ def search_landsat_scenes(aoi, center_datetime, overall_date_range, delta_days, 
         "platform": {"in": platforms},
         "eo:cloud_cover": {"lt": cloud_cover},
     }
-    if landsat_wrs_path:
-        query["landsat:wrs_path"] = {"eq": str(landsat_wrs_path).zfill(3)}
+    if lc2l2_wrs_path:
+        query["lc2l2:wrs_path"] = {"eq": str(lc2l2_wrs_path).zfill(3)}
        
     search = catalog.search(
         collections = collection,
@@ -133,7 +133,7 @@ def search_landsat_scenes(aoi, center_datetime, overall_date_range, delta_days, 
     return pystac.ItemCollection(scenes_on_best_date)
 
 def search_annual_scene(aoi, year, catalog, collection):
-    """Search for annual data such as Landsat and DEM"""
+    """Search for annual data such as lc2l2 and dem"""
     search = catalog.search(
         collections=collection,
         intersects = aoi,

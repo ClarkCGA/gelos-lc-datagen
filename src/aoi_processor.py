@@ -7,8 +7,8 @@ import pystac
 import pandas as pd
 import geopandas as gpd
 
-from .utils.search import search_s2_scenes, search_s1_scenes, search_landsat_scenes, search_annual_scene, count_unique_dates, get_landsat_wrs_path
-from .utils.stack import stack_data, stack_dem_data, stack_land_cover_data, pystac_itemcollection_to_gdf
+from .utils.search import search_s2l2a_scenes, search_s1rtc_scenes, search_lc2l2_scenes, search_annual_scene, count_unique_dates, get_lc2l2_wrs_path
+from .utils.stack import stack_data, stack_dem_data, stack_lulc_data, pystac_itemcollection_to_gdf
 from functools import reduce
 
 class AOI_Processor:
@@ -21,95 +21,95 @@ class AOI_Processor:
         self.chip_index = chip_index
         self.working_directory = working_directory
         self.stacks = {}
-        self.s2_scene_id = None
-        self.landsat_wrs_path = None
-        self.s1_relative_orbit = None
+        self.s2l2a_scene_id = None
+        self.lc2l2_wrs_path = None
+        self.s1rtc_relative_orbit = None
 
 
     def process_aoi(self):
         """Process one AOI by searching and stacking data sources"""
         print(f"\nProcessing AOI at index {self.aoi_index}")
 
-        s2_items = pystac.item_collection.ItemCollection([])
-        for date_range in self.config.sentinel_2.time_ranges:
+        s2l2a_items = pystac.item_collection.ItemCollection([])
+        for date_range in self.config.s2l2a.time_ranges:
             print(f"Searching Sentinel-2 scenes for {date_range}")
-            s2_items_season, self.s2_scene_id = search_s2_scenes(
+            s2l2a_items_season, self.s2l2a_scene_id = search_s2l2a_scenes(
                 self.aoi.geometry,
                 date_range,
                 self.catalog,
-                self.config.sentinel_2.collection,
-                self.config.sentinel_2.nodata_pixel_percentage,
-                self.config.sentinel_2.cloud_cover,
-                self.s2_scene_id,
+                self.config.s2l2a.collection,
+                self.config.s2l2a.nodata_pixel_percentage,
+                self.config.s2l2a.cloud_cover,
+                self.s2l2a_scene_id,
             )
-            if not s2_items_season:
-                raise ValueError("s2 scenes missing")
-            s2_items += s2_items_season
+            if not s2l2a_items_season:
+                raise ValueError("s2l2a scenes missing")
+            s2l2a_items += s2l2a_items_season
 
-        if len(s2_items)<4:
-            raise ValueError(f"S2 scenes missing")
+        if len(s2l2a_items)<4:
+            raise ValueError(f"s2l2a scenes missing")
 
         try:
-            self.epsg = s2_items[0].properties["proj:epsg"]
+            self.epsg = s2l2a_items[0].properties["proj:epsg"]
         except:
-            self.epsg = int(s2_items[0].properties["proj:code"].split(":")[-1])
-        self.s2_bbox = s2_items[0].geometry
+            self.epsg = int(s2l2a_items[0].properties["proj:code"].split(":")[-1])
+        self.s2l2a_bbox = s2l2a_items[0].geometry
         
-        self.landsat_wrs_path = get_landsat_wrs_path(self.s2_bbox)
+        self.lc2l2_wrs_path = get_lc2l2_wrs_path(self.s2l2a_bbox)
 
-        s1_items = pystac.item_collection.ItemCollection([])
-        landsat_items = pystac.item_collection.ItemCollection([])
+        s1rtc_items = pystac.item_collection.ItemCollection([])
+        lc2l2_items = pystac.item_collection.ItemCollection([])
         
-        for s2_item, date_range in zip(s2_items, self.config.sentinel_2.time_ranges):
-            center_datetime = s2_item.datetime
-            print(f"searching sentinel_1 and landsat scenes close to {center_datetime} within {date_range}")
-            s1_item, self.s1_relative_orbit = search_s1_scenes(
-                self.s2_bbox,
+        for s2l2a_item, date_range in zip(s2l2a_items, self.config.s2l2a.time_ranges):
+            center_datetime = s2l2a_item.datetime
+            print(f"searching s1rtc and lc2l2 scenes close to {center_datetime} within {date_range}")
+            s1rtc_item, self.s1rtc_relative_orbit = search_s1rtc_scenes(
+                self.s2l2a_bbox,
                 center_datetime,
                 date_range,
-                self.config.sentinel_1.delta_days,
+                self.config.s1rtc.delta_days,
                 self.catalog,
-                self.config.sentinel_1.collection,
-                self.s1_relative_orbit,
+                self.config.s1rtc.collection,
+                self.s1rtc_relative_orbit,
             )
-            if not s1_item:
-                raise ValueError("s1 scenes missing")
-            s1_items += s1_item
+            if not s1rtc_item:
+                raise ValueError("s1rtc scenes missing")
+            s1rtc_items += s1rtc_item
 
-            landsat_item = search_landsat_scenes(
-                self.s2_bbox,
+            lc2l2_item = search_lc2l2_scenes(
+                self.s2l2a_bbox,
                 center_datetime,
                 date_range,
-                self.config.landsat.delta_days,
+                self.config.lc2l2.delta_days,
                 self.catalog,
-                self.config.landsat.collection,
-                self.config.landsat.platforms,
-                self.config.landsat.cloud_cover,
-                self.landsat_wrs_path,
+                self.config.lc2l2.collection,
+                self.config.lc2l2.platforms,
+                self.config.lc2l2.cloud_cover,
+                self.lc2l2_wrs_path,
             )
-            if not landsat_item:
-                raise ValueError("landsat scenes missing")
-            landsat_items += landsat_item
+            if not lc2l2_item:
+                raise ValueError("lc2l2 scenes missing")
+            lc2l2_items += lc2l2_item
 
-        if count_unique_dates(landsat_items) < 4:
-            raise ValueError(f"landsat scenes missing")
+        if count_unique_dates(lc2l2_items) < 4:
+            raise ValueError(f"lc2l2 scenes missing")
 
-        if count_unique_dates(s1_items) < 4:
-            raise ValueError(f"s1 scenes missing")
+        if count_unique_dates(s1rtc_items) < 4:
+            raise ValueError(f"s1rtc scenes missing")
                 
-        print("searching land cover data...")
-        land_cover_items = search_annual_scene(
-            self.s2_bbox,
-            self.config.land_cover.year,
+        print("searching lulc data...")
+        lulc_items = search_annual_scene(
+            self.s2l2a_bbox,
+            self.config.lulc.year,
             self.catalog,
-            self.config.land_cover.collection,
+            self.config.lulc.collection,
         )
-        if not land_cover_items:
-            raise ValueError(f"land_cover data missing")
+        if not lulc_items:
+            raise ValueError(f"lulc data missing")
 
         print("searching dem data...")
         dem_items = search_annual_scene(
-            self.s2_bbox,
+            self.s2l2a_bbox,
             self.config.dem.year,
             self.catalog,
             self.config.dem.collection,
@@ -119,10 +119,10 @@ class AOI_Processor:
 
             # first, get area of overlap of all item bboxes
         self.itemcollections = {
-            "sentinel_2": s2_items,
-            "sentinel_1": s1_items,
-            "landsat": landsat_items,
-            "land_cover": land_cover_items,
+            "s2l2a": s2l2a_items,
+            "s1rtc": s1rtc_items,
+            "lc2l2": lc2l2_items,
+            "lulc": lulc_items,
             "dem": dem_items
         }
         bbox_gdf = pd.concat([pystac_itemcollection_to_gdf(items) for items in self.itemcollections.values()])
@@ -142,20 +142,20 @@ class AOI_Processor:
             f"{platform}_scene_ids": ','.join([item.id for item in items]) for platform, items in self.itemcollections.items()
         }
         
-        print("stacking landsat data...")
-        self.stacks['landsat'] = stack_data(
-            landsat_items,
-            "landsat",
-            self.config.landsat.native_crs,
-            self.config.landsat.resolution,
-            self.config.landsat.bands,
-            self.config.landsat.cloud_band,
+        print("stacking lc2l2 data...")
+        self.stacks['lc2l2'] = stack_data(
+            lc2l2_items,
+            "lc2l2",
+            self.config.lc2l2.native_crs,
+            self.config.lc2l2.resolution,
+            self.config.lc2l2.bands,
+            self.config.lc2l2.cloud_band,
             self.epsg,
             self.overlap_bounds,
             bbox_is_latlon = True
         )
         
-        overlap_bbox = self.stacks['landsat'].rio.bounds()
+        overlap_bbox = self.stacks['lc2l2'].rio.bounds()
 
         print("stacking dem data...")
         self.stacks['dem'] = stack_dem_data(
@@ -168,37 +168,37 @@ class AOI_Processor:
         )
 
         print("stacking land cover data...")
-        self.stacks['land_cover'] = stack_land_cover_data(
-            land_cover_items, 
-            self.config.land_cover.native_crs,
-            self.config.land_cover.resolution, 
+        self.stacks['lulc'] = stack_lulc_data(
+            lulc_items, 
+            self.config.lulc.native_crs,
+            self.config.lulc.resolution, 
             self.epsg, 
             overlap_bbox,
             bbox_is_latlon=False
         )
 
 
-        print("stacking sentinel_1 data...")
-        self.stacks['sentinel_1'] = stack_data(
-            s1_items,
-            "sentinel_1",
-            self.config.sentinel_1.native_crs,
-            self.config.sentinel_1.resolution,
-            self.config.sentinel_1.bands,
+        print("stacking s1rtc data...")
+        self.stacks['s1rtc'] = stack_data(
+            s1rtc_items,
+            "s1rtc",
+            self.config.s1rtc.native_crs,
+            self.config.s1rtc.resolution,
+            self.config.s1rtc.bands,
             None,  # No cloud band for Sentinel-1
             self.epsg,
             overlap_bbox,
             bbox_is_latlon=False
         )
 
-        print("stacking sentinel_2 data...")
-        self.stacks['sentinel_2'] = stack_data(
-            s2_items,
-            "sentinel_2",
-            self.config.sentinel_2.native_crs,
-            self.config.sentinel_2.resolution,
-            self.config.sentinel_2.bands,
-            self.config.sentinel_2.cloud_band,
+        print("stacking s2l2a data...")
+        self.stacks['s2l2a'] = stack_data(
+            s2l2a_items,
+            "s2l2a",
+            self.config.s2l2a.native_crs,
+            self.config.s2l2a.resolution,
+            self.config.s2l2a.bands,
+            self.config.s2l2a.cloud_band,
             self.epsg,
             overlap_bbox,
             bbox_is_latlon=False

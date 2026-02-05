@@ -27,7 +27,7 @@ def scale(array: np.array):
     return array_norm
 
 
-def s1_norm(linear_data, band='VV'):
+def s1rtc_norm(linear_data, band='VV'):
     # Convert linear power to dB
     db_data = 10 * np.log10(linear_data)
 
@@ -45,7 +45,7 @@ def s1_norm(linear_data, band='VV'):
 
     return scaled_data
     
-def create_s1_rgb_composite(s1_array: xr.DataArray):
+def create_s1rtc_rgb_composite(s1rtc_array: xr.DataArray):
     """
     Creates an RGB image from a Sentinel-1 xarray.DataArray.
     
@@ -54,15 +54,15 @@ def create_s1_rgb_composite(s1_array: xr.DataArray):
     - Green: VH (Cross-Pol) -> Sensitive to volume scattering.
     - Blue: VV/VH Ratio -> Helps differentiate smooth surfaces like water.
 
-    :param s1_array: xr.DataArray with 'vv' and 'vh' bands.
+    :param s1rtc_array: xr.DataArray with 'vv' and 'vh' bands.
     :return: 8-bit RGB image as a numpy array.
     """
-    vv = s1_array.isel(band=0).values.astype(float)
-    vh = s1_array.isel(band=1).values.astype(float)
+    vv = s1rtc_array.isel(band=0).values.astype(float)
+    vh = s1rtc_array.isel(band=1).values.astype(float)
 
     # Normalize each polarization to enhance contrast
-    vv_norm = s1_norm(vv, 'VV')
-    vh_norm = s1_norm(vh, 'VH')
+    vv_norm = s1rtc_norm(vv, 'VV')
+    vh_norm = s1rtc_norm(vh, 'VH')
 
     # Calculate the ratio for the blue channel. Add epsilon to avoid division by zero.
     ratio = vv_norm / (vh_norm + 1e-6)
@@ -91,8 +91,8 @@ def save_thumbnails(array, root_path, index):
         filename = f"{array.name}_{index:06}_{i}_{ts.strftime('%Y%m%d')}.png"
         file_path = os.path.join(root_path, filename)
 
-        if array.name == 'sentinel_1':
-            rgb_8bit = create_s1_rgb_composite(array.isel(time=i))
+        if array.name == 's1rtc':
+            rgb_8bit = create_s1rtc_rgb_composite(array.isel(time=i))
         else:
             blue  = array.isel(time = i,band=1).values.astype(float)
             green = array.isel(time = i,band=2).values.astype(float)

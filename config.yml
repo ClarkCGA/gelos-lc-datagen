@@ -10,11 +10,12 @@ aoi:
 directory:
   working: "/app/data/interim"
   output: "/app/data/processed"
+  zip_output: False
 
 log_errors: true
 
 # Sentinel-2 (S2) settings
-sentinel_2:
+s2l2a:
   collection: "sentinel-2-l2a"
   time_ranges:
     - "2023-01-01/2023-03-31" # (Jan-Feb-Mar)
@@ -46,24 +47,24 @@ sentinel_2:
   dtype: "int16"
 
 # Sentinel-1 (S1) settings
-sentinel_1:
+s1rtc:
   delta_days: 12
   collection: "sentinel-1-rtc"
   nodata_pixel_percentage : 5 # Maximum missing data percentage in scene
   bands: ["vv", "vh"]  # VV, VH
   resolution: 10  # Spatial resolution in meters
-  native_crs: false # False gets crs of S2, True gets crs of first Landsat scene              
+  native_crs: false # False gets crs of S2, True gets crs of first lc2l2 scene              
   fill_na: false
   na_value: -999 
   dtype: "float32"
 
-# Landsat-8 (L8) and Landsat-9 (L9) settings
-landsat:
-  delta_days: 91 # get the full season for landsat
+# landsat-8 (L8) and landsat-9 (L9) settings
+lc2l2:
+  delta_days: 91 # get the full season for lc2l2
   collection: "landsat-c2-l2"
   platforms: ["landsat-8", "landsat-9"]
   cloud_cover: 50  # Maximum allowed cloud cover percentage in scene
-  # landsat does not have a nodata pixel percentage property
+  # lc2l2 does not have a nodata pixel percentage property
   bands:
   - "coastal"    # Coastal/Aerosol (Band 1)
   - "blue"       # Blue (Band 2)
@@ -79,7 +80,7 @@ landsat:
   - "qa_pixel"   # Quality Assessment Pixel Mask  # Blue, Green, Red, NIR, SWIR1, SWIR2
   cloud_band: "qa_pixel"
   resolution: 30  # Spatial resolution in meters
-  native_crs: False # False gets crs of S2, True gets crs of first Landsat scene
+  native_crs: False # False gets crs of S2, True gets crs of first lc2l2 scene
   fill_na: false
   na_value: -999
   dtype: float32
@@ -94,7 +95,7 @@ dem:
   dtype: float32
 
 # Land Cover (LC) settings
-land_cover:
+lulc:
   collection: "io-lulc-annual-v02"
   year: "2023-01-02/2023-12-31" # Year for the land cover dataset
   resolution: 10

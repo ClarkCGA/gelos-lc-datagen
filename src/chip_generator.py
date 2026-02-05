@@ -2,7 +2,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from src.aoi_processor import AOI_Processor
 from src.utils.output import save_multitemporal_chips, save_thumbnails
-from src.utils.array import unique_class, process_array
+from src.utils.array import process_array
 import numpy as np
 import pandas as pd
 
@@ -15,53 +15,50 @@ class ChipGenerator:
         """
         Saves chip data arrays to files.
         """
-        lc_path = f"{self.processor.working_directory}/lc_{index:06}.tif"
+        lulc_path = f"{self.processor.working_directory}/lc_{index:06}.tif"
         dem_path = f"{self.processor.working_directory}/dem_{index:06}.tif"
-        sentinel_2_dates, sentinel_1_dates, landsat_dates = [], [], []
-        sentinel_2_dates = save_multitemporal_chips(arrays['sentinel_2'], self.processor.working_directory, index)
-        sentinel_1_dates = save_multitemporal_chips(arrays['sentinel_1'], self.processor.working_directory, index)
-        landsat_dates = save_multitemporal_chips(arrays['landsat'], self.processor.working_directory, index)
+        s2l2a_dates, s1rtc_dates, lc2l2_dates = [], [], []
+        s2l2a_dates = save_multitemporal_chips(arrays['s2l2a'], self.processor.working_directory, index)
+        s1rtc_dates = save_multitemporal_chips(arrays['s1rtc'], self.processor.working_directory, index)
+        lc2l2_dates = save_multitemporal_chips(arrays['lc2l2'], self.processor.working_directory, index)
 
-        save_thumbnails(arrays['sentinel_2'], self.processor.working_directory, index)
-        save_thumbnails(arrays['landsat'], self.processor.working_directory, index)
-        save_thumbnails(arrays['sentinel_1'], self.processor.working_directory, index)
+        save_thumbnails(arrays['s2l2a'], self.processor.working_directory, index)
+        save_thumbnails(arrays['lc2l2'], self.processor.working_directory, index)
+        save_thumbnails(arrays['s1rtc'], self.processor.working_directory, index)
     
-        arrays['land_cover'].rio.to_raster(lc_path)
+        arrays['lulc'].rio.to_raster(lulc_path)
         arrays['dem'].rio.to_raster(dem_path)
-        return sentinel_2_dates, sentinel_1_dates, landsat_dates
+        return s2l2a_dates, s1rtc_dates, lc2l2_dates
  
     def generate_from_aoi(self):
         for name, stack in self.processor.stacks.items():
-            # if name == "sentinel_2":
-            #     continue
             print(f"loading {name} stack")
             self.processor.stacks[name] = stack.compute()
 
-        land_cover_sample_size = int(self.processor.config.chips.sample_size / self.processor.config.land_cover.resolution)
+        lulc_sample_size = int(self.processor.config.chips.sample_size / self.processor.config.lulc.resolution)
         
-        self.land_cover_min = self.processor.stacks['land_cover'].coarsen(x = land_cover_sample_size,
-                                         y = land_cover_sample_size,
+        self.lulc_min = self.processor.stacks['lulc'].coarsen(x = lulc_sample_size,
+                                         y = lulc_sample_size,
                                          boundary = "trim"
                                         ).min()
-        self.land_cover_max = self.processor.stacks['land_cover'].coarsen(x = land_cover_sample_size,
-                                         y = land_cover_sample_size,
+        self.lulc_max = self.processor.stacks['lulc'].coarsen(x = lulc_sample_size,
+                                         y = lulc_sample_size,
                                          boundary = "trim"
                                         ).max()
-        self.land_cover_uniqueness = (self.land_cover_min == self.land_cover_max) & (self.land_cover_min > 0)
-        # self.land_cover_uniqueness[0:2, :] = False
-        # self.land_cover_uniqueness[-2:, :] = False
-        # self.land_cover_uniqueness[:, 0:2] = False
-        # self.land_cover_uniqueness[:, -2:] = False
+        self.lulc_uniqueness = (self.lulc_min == self.lulc_max) & (self.lulc_min > 0)
+        # self.lulc_uniqueness[0:2, :] = False
+        # self.lulc_uniqueness[-2:, :] = False
+        # self.lulc_uniqueness[:, 0:2] = False
+        # self.lulc_uniqueness[:, -2:] = False
 
-        ys, xs = np.where(self.land_cover_uniqueness)
+        ys, xs = np.where(self.lulc_uniqueness)
 
         # Following indices are added to limit the number of rangeland, bareground, and water chips per tile
-        land_cover_indices = {1: 0, 2: 0, 5: 0, 7: 0, 8: 0, 11: 0}
+        lulc_indices = {1: 0, 2: 0, 5: 0, 7: 0, 8: 0, 11: 0}
 
         for index in range(0, len(ys)):
 
-            sentinel_2_dates, sentinel_1_dates, landsat_dates = [], [], []
-            land_cover = None
+            s2l2a_dates, s1rtc_dates, lc2l2_dates = [], [], []
             footprints = {}
             arrays = {}
             status = None
@@ -72,33 +69,33 @@ class ChipGenerator:
 
 
                 # process the land cover stack first, to check land cover information
-                arrays["land_cover"], footprints["land_cover"] = process_array(
-                    stack = self.processor.stacks['land_cover'],
+                arrays["lulc"], footprints["lulc"] = process_array(
+                    stack = self.processor.stacks['lulc'],
                     epsg = self.processor.epsg,
                     coords = (x, y),
-                    array_name = "land_cover",
+                    array_name = "lulc",
                     chip_size = self.processor.config.chips.chip_size,
                     sample_size = self.processor.config.chips.sample_size,
-                    resolution = self.processor.config.land_cover.resolution,
-                    fill_na = self.processor.config.land_cover.fill_na,
-                    na_value = self.processor.config.land_cover.na_value,
-                    dtype = self.processor.config.land_cover.dtype,
+                    resolution = self.processor.config.lulc.resolution,
+                    fill_na = self.processor.config.lulc.fill_na,
+                    na_value = self.processor.config.lulc.na_value,
+                    dtype = self.processor.config.lulc.dtype,
                 )
 
-                if (~np.isin(arrays['land_cover'], [1, 2, 4, 5, 7, 8, 11])).any():
-                    raise ValueError("land_cover_values_wrong")
+                if (~np.isin(arrays['lulc'], [1, 2, 4, 5, 7, 8, 11])).any():
+                    raise ValueError("lulc_values_wrong")
 
-                if (np.isin(arrays['land_cover'], [4])).any():
-                    raise ValueError("land_cover_values_flooded_vegetation")
+                if (np.isin(arrays['lulc'], [4])).any():
+                    raise ValueError("lulc_values_flooded_vegetation")
 
-                land_cover = int(np.unique(arrays['land_cover'])[0])
+                chip_lulc = int(np.unique(arrays['lulc'])[0])
                 
-                if land_cover_indices[land_cover] > 400:
-                    raise ValueError(f"land_cover_{land_cover}_limit")
+                if lulc_indices[lulc] > 400:
+                    raise ValueError(f"lulc_{chip_lulc}_limit")
 
                 # process th rest of the stacks into arrays
                 for name, stack in self.processor.stacks.items():
-                    if name == 'land_cover':
+                    if name == 'lulc':
                         continue
                     stack_config = getattr(self.processor.config, name)
                     arrays[name], footprints[name] = process_array(
@@ -116,9 +113,9 @@ class ChipGenerator:
 
                 # generate chips from arrays
                 print(f"Generating Chips for chip {self.processor.chip_index}...")
-                sentinel_2_dates, sentinel_1_dates, landsat_dates = self.gen_chips(self.processor.chip_index, arrays)
+                s2l2a_dates, s1rtc_dates, lc2l2_dates = self.gen_chips(self.processor.chip_index, arrays)
                 status = 'success'
-                land_cover_indices[land_cover] += 1
+                lulc_indices[chip_lulc] += 1
 
             except Exception as e:
                 print(e)
@@ -128,11 +125,11 @@ class ChipGenerator:
                 self.chip_entries.append({
                         'chip_index': self.processor.chip_index,
                         'aoi_index': self.processor.aoi_index,
-                        'sentinel_2_dates': sentinel_2_dates,
-                        'sentinel_1_dates': sentinel_1_dates,
-                        'landsat_dates': landsat_dates,
-                        'land_cover': land_cover,
-                        'chip_footprint': footprints.get('land_cover'),
+                        's2l2a_dates': s2l2a_dates,
+                        's1rtc_dates': s1rtc_dates,
+                        'lc2l2_dates': lc2l2_dates,
+                        'lulc': chip_lulc,
+                        'chip_footprint': footprints.get('lulc'),
                         'epsg': self.processor.epsg,
                         'status': status,
                         **self.processor.scene_ids

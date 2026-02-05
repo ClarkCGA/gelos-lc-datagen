@@ -55,10 +55,10 @@ def stack_data(
         fill_value=np.nan,
        **bounds_kwargs
     )
-    if platform in ['sentinel_2', 'landsat']:
+    if platform in ['s2l2a', 'LC2L2']:
         stack = mask_cloudy_pixels(stack, platform)
 
-    if platform not in ['sentinel_2']:
+    if platform not in ['s2l2a']:
         quarter_times = stack.time.groupby("time.quarter").first()
         stack = stack.groupby("time.quarter").first(skipna=True)
         stack['quarter'] = quarter_times.values
@@ -67,7 +67,7 @@ def stack_data(
  
     if len(stack.band) != len(bands):
         raise ValueError(f"{platform} unexpected number of bands")
-    if platform in ['sentinel_2', 'landsat']:
+    if platform in ['s2l2a', 'LC2L2']:
         stack = stack.drop_sel(band=cloud_band)
     
     return stack
@@ -94,7 +94,7 @@ def stack_dem_data(items, native_crs, resolution, epsg=None, bbox=None, bbox_is_
     
     return stack
 
-def stack_land_cover_data(items, native_crs, resolution, epsg, bbox, bbox_is_latlon=False):
+def stack_lulc_data(items, native_crs, resolution, epsg, bbox, bbox_is_latlon=False):
     if not items:
         print("No Land Cover data found.")
         return None
@@ -124,7 +124,7 @@ def adjust_bbox_to_resolution(bbox, resolution):
     return bbox_adjusted
    
 def mask_cloudy_pixels(stack, platform):
-    if platform == "landsat":
+    if platform == "lc2l2":
         qa = stack.sel(band="qa_pixel").astype("uint16")
         
         # Define bitmask for cloud-related flags
@@ -137,7 +137,7 @@ def mask_cloudy_pixels(stack, platform):
         
         # Apply the mask
         stack = stack.where(clear_mask)
-    elif platform == "sentinel_2":
+    elif platform == "s2l2a":
         scl = stack.sel(band="SCL")
         clear_mask = scl.isin([2, 4, 5, 6, 11])
         stack = stack.where(clear_mask)
