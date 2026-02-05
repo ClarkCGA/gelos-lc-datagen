@@ -2,7 +2,7 @@ services:
   notebook:
     image: gelos-lc-datagen:latest
     build: .
-    user: "${UID:-1000}:${GID:-100}"
+    user: root 
     environment:
       PYTHONPATH: /app/code
       NB_UID: "${UID:-1000}"
