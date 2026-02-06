@@ -153,24 +153,24 @@ class DataCleaner:
             for col in ["s2l2a_dates", "s1rtc_dates", "lc2l2_dates"]:
                 for i, date in enumerate(row[col].split(',')):
                     platform = col[:-6]
-                    src_file = self.working_dir / self.version / f"{platform}_{row["original_id"]:06}_{i}_{date}.tif"
-                    dst_file = self.output_dir / self.version / f"{platform}_{row["id"]:06}_{date}.tif"
+                    src_file = self.working_dir / self.version / f"{platform}_{row['original_id']:06}_{i}_{date}.tif"
+                    dst_file = self.output_dir / self.version / f"{platform}_{row['id']:06}_{date}.tif"
                     shutil.copy2(src_file, dst_file)
-                    src_file = self.working_dir / self.version / f"{platform}_{row["original_id"]:06}_{i}_{date}.png"
-                    dst_file = self.output_dir / self.version / f"{platform}_{row["id"]:06}_{date}.png"
+                    src_file = self.working_dir / self.version / f"{platform}_{row['original_id']:06}_{i}_{date}.png"
+                    dst_file = self.output_dir / self.version / f"{platform}_{row['id']:06}_{date}.png"
                     shutil.copy2(src_file, dst_file)
-            src_file = self.working_dir / self.version / f"dem_{row["original_id"]:06}.tif"
-            dst_file = self.output_dir / self.version / f"dem_{row["id"]:06}.tif"
+            src_file = self.working_dir / self.version / f"dem_{row['original_id']:06}.tif"
+            dst_file = self.output_dir / self.version / f"dem_{row['id']:06}.tif"
             shutil.copy2(src_file, dst_file)
         
         # zip folder
-        if config.directory.zip_output:
+        if self.config.directory.zip_output:
             folder_to_zip = self.working_dir / self.version
             output_zip_file = self.output_dir / self.version / self.version
             shutil.make_archive(output_zip_file, 'zip', folder_to_zip)
 
 def main():
-    config = GELOSConfig.from_yaml('/app/code/config.yml')
+    config = GELOSConfig.from_yaml('/app/config.yml')
     cleaner = DataCleaner(config)
     cleaner.clean()
 

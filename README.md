@@ -4,8 +4,10 @@ This repo contains the code to generate samples for GELOS Land Cover.
 
 To run the code:
 ```
-docker compose up -d
+docker compose up --build -d
 ```
+
+The notebook container uses Pixi with the project baked into the image at `/opt/pixi` and runs with `/app/` as the working directory. Live repo edits are mounted at `/app/`, while Pixi installs stay inside the image.
 
 The repo contains areas of interest for sample generation in GeoJSON files located under `data/`. Each version of the dataset has its own file. 
 

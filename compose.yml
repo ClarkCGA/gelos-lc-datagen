@@ -1,21 +1,24 @@
 services:
   notebook:
-    image: gelos-lc-datagen:latest
     build: .
-    user: root 
+    image: gelos-lc-datagen
+    user: "${UID:-1000}:${GID:-100}" 
+    group_add:
+      - users
     environment:
-      PYTHONPATH: /app/code
-      NB_UID: "${UID:-1000}"
-      NB_GID: "${GID:-100}"
-      GRANT_SUDO: yes
+      PYTHONPATH: /app
+      # NB_UID: "${UID:-1000}"
+      # NB_GID: "${GID:-100}"
+      # CHOWN_HOME: yes
+    working_dir: /app
     ports:
       - "${JUPYTER_HOST_PORT}:8888"
       - "${DASK_HOST_PORT}:8787"
     volumes:
-      - ./:/app/code/
+      - ./:/app
       - "${EXTERNAL_PATH}:/app/data/external/"
-      - "${RAW_PATH}:/app/data/raw/"
+      # - "${RAW_PATH}:/app/data/raw/" # raw data is small and therefore stored in the repo
       - "${INTERIM_PATH}:/app/data/interim/"
       - "${PROCESSED_PATH}:/app/data/processed/"
     shm_size: '2gb'
-    command: bash -lc "jupyter lab --ip=0.0.0.0 ${JUPYTERLAB_ARGS:-}"
+    command: pixi run start-notebook.py
