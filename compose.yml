@@ -1,19 +1,19 @@
 services:
-  notebook:
-    build: .
-    image: gelos-lc-datagen
-    user: "${UID:-1000}:${GID:-100}" 
+  dev:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: dev
+    image: gelos-lc-datagen-dev
+    user: "${UID:-1000}:${GID:-100}"
     group_add:
       - users
     environment:
       PYTHONPATH: /app
-      # NB_UID: "${UID:-1000}"
-      # NB_GID: "${GID:-100}"
-      # CHOWN_HOME: yes
     working_dir: /app
     ports:
-      - "${JUPYTER_HOST_PORT}:8888"
-      - "${DASK_HOST_PORT}:8787"
+      - "${JUPYTER_HOST_PORT:-8888}:8888"
+      - "${DASK_HOST_PORT:-8787}:8787"
     volumes:
       - ./:/app
       - "${EXTERNAL_PATH}:/app/data/external/"
@@ -22,3 +22,23 @@ services:
       - "${PROCESSED_PATH}:/app/data/processed/"
     shm_size: '2gb'
     command: pixi run start-notebook.py
+  test:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: test
+    image: gelos-lc-datagen-test
+    environment:
+      PYTHONPATH: /app
+    working_dir: /app
+    command: pixi run make test
+  prod:
+    build:
+      context: .
+      dockerfile: Dockerfile
+      target: prod
+    image: gelos-lc-datagen-prod
+    environment:
+      PYTHONPATH: /app
+    working_dir: /app
+ 

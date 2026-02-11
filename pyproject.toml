@@ -1,0 +1,64 @@
+[build-system]
+requires = ["flit_core >=3.2,<4"]
+build-backend = "flit_core.buildapi"
+
+[project]
+name = "src"
+version = "0.0.1"
+description = "Repository for generating the Land Cover dataset for GELOS"
+authors = [
+  { name = "Denys Godwin" },
+]
+license = { file = "LICENSE" }
+readme = "README.md"
+classifiers = [
+    "Programming Language :: Python :: 3",
+    "License :: OSI Approved :: MIT License"
+]
+requires-python = "~=3.11.0"
+
+
+[tool.ruff]
+line-length = 99
+src = ["src"]
+include = ["pyproject.toml", "src/**/*.py"]
+
+[tool.ruff.lint]
+extend-select = ["I"]  # Add import sorting
+
+[tool.ruff.lint.isort]
+known-first-party = ["src"]
+force-sort-within-sections = true
+
+
+[tool.pixi.workspace]
+name = "gelos-lc-datagen"
+description = "Repository for generating the Land Cover dataset for GELOS"
+version = "0.1.0"
+channels = ["conda-forge"]
+platforms = ["linux-64"]
+
+[tool.pixi.dependencies]
+python = "~=3.11.0"
+pystac-client = "0.7.*"
+planetary-computer = "1.0.*"
+leafmap = "0.38.*"
+matplotlib = "*"
+dask = "2024.9.*"
+dask-labextension = "*"
+distributed = "2024.9.*"
+rioxarray = "0.17.*"
+stackstac = "0.5.*"
+numpy = "<2.0"
+tifffile = "2024.9.*"
+localtileserver = "*"
+jupyter-server-proxy = "*"
+s3fs = "*"
+
+[tool.pixi.pypi-dependencies]
+mkdocs = "*"
+python-dotenv = "*"
+
+[tool.pixi.pypi-dependencies.src]
+path = "."
+editable = true
