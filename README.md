@@ -20,7 +20,7 @@ The repo contains areas of interest for sample generation in GeoJSON files locat
   
 - v0.40: This version provides dem, Landsat 8-9, Sentinel 2, and Sentinel 1 data for each chip.
 
-- v0.50.1: This version adds new AOIs for better geospatial representation. File names follow this convention for dem: ```dem_{chip_id:06}.tif``` and this convention for mutlitemporal platforms (s1rtc, s2l2a, lc2l2): ```{platform}_{chip_id:06}_{date}.tif```. PNG visualization are included for multitemporal data sources wth the same naming convention, substituting ```png``` for ```tif```. The dataset consists of 78,585 chips. A chip tracker metadata GeoJSON named ```gelos_chip_tracker.geojson``` is included with the following fields:
+- v0.50.1: This version adds new AOIs for better geospatial representation. File names follow this convention for dem: ```dem_{chip_id:06}.tif``` and this convention for multitemporal platforms (s1rtc, s2l2a, lc2l2): ```{platform}_{chip_id:06}_{date}.tif```. PNG visualization are included for multitemporal data sources wth the same naming convention, substituting ```png``` for ```tif```. The dataset consists of 78,585 chips. A chip tracker metadata GeoJSON named ```gelos_chip_tracker.geojson``` is included with the following fields:
 
 original_id <class 'numpy.int32'> The chip's original ID, skipping chips which did not generate.
 aoi_index <class 'numpy.int32'> The chip's source AOI, useful for grouping chips together.
