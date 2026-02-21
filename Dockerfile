@@ -29,14 +29,7 @@ FROM base AS prod
 
 CMD ["pixi", "run", "make"]
 
-
-FROM quay.io/jupyter/base-notebook:python-3.12 AS dev
-
-ENV NB_UID=1000 \
-    NB_GID=100 \
-    NB_USER=jovyan \
-    CHOWN_HOME=yes \
-    CHOWN_HOME_OPTS=-R
+FROM quay.io/jupyter/pytorch-notebook:cuda12-python-3.13 AS dev
 
 USER root
 
@@ -46,9 +39,8 @@ RUN apt-get update \
     make \
     && rm -rf /var/lib/apt/lists/*
 
-USER ${NB_USER}
-RUN curl -fsSL https://pixi.sh/install.sh | sh
-ENV PATH="/home/${NB_USER}/.pixi/bin:/app/.pixi/envs/default/bin:${PATH}"
+RUN curl -fsSL https://pixi.sh/install.sh | PIXI_HOME=/usr/local sh
+ENV PATH="/app/.pixi/envs/default/bin:${PATH}"
 
 WORKDIR /app
 

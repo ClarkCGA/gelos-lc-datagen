@@ -1,4 +1,4 @@
-# Generating Data for GFM-Bech
+# Generating Data for GFM-Bench
 
 This repo contains the code to generate samples for GELOS Land Cover. 
 

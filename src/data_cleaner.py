@@ -12,8 +12,6 @@ from src.gelos_config import GELOSConfig
 
 s3 = s3fs.S3FileSystem(anon=True)
 
-# TODO: Make this part of the data generation logic - construct filepaths
-
 def _construct_file_paths(row, modality: str) -> str:
     date_list = row[f"{modality}_dates"].split(",")
     id = row["id"]

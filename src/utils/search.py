@@ -6,8 +6,9 @@ import pystac
 import geopandas as gpd
 from shapely.geometry import shape
 
-lc2l2_wrs_path = '/home/benchuser/data/WRs2l2a_descending_0.zip'
-lc2l2_wrs_url = 'https://d9-wret.s3.us-west-2.amazonaws.com/assets/palladium/production/s3fs-public/atoms/files/WRs2l2a_descending_0.zip'
+lc2l2_wrs_path = '/home/benchuser/data/WRS2_descending_0.zip'
+
+lc2l2_wrs_url = 'https://d9-wret.s3.us-west-2.amazonaws.com/assets/palladium/production/s3fs-public/atoms/files/WRS2_descending_0.zip'
 
 try:
     lc2l2_wrs_gdf = gpd.read_file(lc2l2_wrs_path).to_crs(3857)
