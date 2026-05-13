@@ -90,7 +90,7 @@ class ChipGenerator:
 
                 chip_lulc = int(np.unique(arrays['lulc'])[0])
                 
-                if lulc_indices[lulc] > 400:
+                if lulc_indices[chip_lulc] > 400:
                     raise ValueError(f"lulc_{chip_lulc}_limit")
 
                 # process th rest of the stacks into arrays
