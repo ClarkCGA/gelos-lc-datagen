@@ -24,7 +24,7 @@ def get_lc2l2_wrs_path(aoi):
 
     return int(best_footprint['PATH'])
     
-def search_s2l2a_scenes(aoi, overall_date_range, catalog, collection, nodata_pixel_percentage, cloud_cover, s2l2a_mgrs_tile):
+def search_s2l2a_scenes(aoi, overall_date_range, catalog, collection, nodata_pixel_percentage, cloud_cover, s2l2a_mgrs_tile=None):
     """
     Searches for Sentinel-2 scenes within the AOI and date range.
     When passed a Sentinel-2 scene ID, will only return chips matching this scene ID
@@ -107,7 +107,7 @@ def search_lc2l2_scenes(aoi, center_datetime, overall_date_range, delta_days, ca
         "eo:cloud_cover": {"lt": cloud_cover},
     }
     if lc2l2_wrs_path:
-        query["lc2l2:wrs_path"] = {"eq": str(lc2l2_wrs_path).zfill(3)}
+        query["landsat:wrs_path"] = {"eq": str(lc2l2_wrs_path).zfill(3)}
        
     search = catalog.search(
         collections = collection,

@@ -10,7 +10,7 @@ aoi:
 directory:
   working: "/app/data/interim"
   output: "/app/data/processed"
-  zip_output: False
+  zip_output: false
 
 log_errors: true
 
